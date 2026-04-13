@@ -1,15 +1,20 @@
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional
 
 
 class TransactionBase(BaseModel):
     date: datetime
-    amount: Decimal = Field(
-        ...,
-        description="Transaction amount. Positive for income, negative for expense.",
-    )
-    # category: str | None = None
+    category: Optional[str] = None
+    card: Optional[str] = None
+    description: Optional[str] = None
+    amount: Decimal = Field(..., max_digits=10, decimal_places=2)
+    currency: str = Field(..., min_length=3, max_length=3)
+    balance_after: Decimal = Field(..., max_digits=10, decimal_places=2)
+    balance_currency: str = Field(..., min_length=3, max_length=3)
+    transaction_currency: str = Field(..., min_length=3, max_length=3)
+    transaction_amount: Decimal = Field(..., max_digits=10, decimal_places=2)
 
 
 class TransactionCreate(TransactionBase):
@@ -26,3 +31,4 @@ class TransactionResponse(TransactionBase, ORMResponseBase):
     """Schema for validating outgoing data returned to the client."""
 
     id: int
+    created_at: datetime
