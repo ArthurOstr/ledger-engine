@@ -1,13 +1,10 @@
 from decimal import Decimal
 from typing import Optional
 from datetime import datetime
-from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Numeric, DateTime, func
 
-
-class Base(DeclarativeBase):
-    pass
-
+from app.database import Base
 
 class Transaction(Base):
     __tablename__ = "transactions"

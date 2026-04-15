@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from app.database import engine, Base
 from app.models.transaction import Transaction
 
+from app.routers import transaction
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,3 +21,6 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+app.include_router(transaction.router)
