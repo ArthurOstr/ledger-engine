@@ -1,9 +1,11 @@
 import pandas as pd
 import io
+import hashlib
 from decimal import Decimal
 from fastapi import UploadFile, HTTPException
-
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
+
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionBase, TransactionCreate
 
@@ -22,6 +24,11 @@ BANK_MAPPING = {
     "Залишок на кінець періоду": "balance_after",
     "Валюта залишку": "balance_currency",
 }
+
+
+def generate_row_hash(date: pd.Timestamp, amount: Decimal, description: str) -> str:
+    raw_string = f"{date}|{amount}|{str(description).strip()}"
+    return hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
 
 async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
@@ -47,6 +54,14 @@ async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
                 df_clean[col] = df_clean[col].astype(str).apply(Decimal)
 
         df_clean = df_clean.where(pd.notnull(df_clean), None)
+
+        # Applying hash to the DataFrame
+        df_clean["hash_id"] = df_clean.apply(
+            lambda row: generate_row_hash(
+                row["date"], row["amount"], row["description"]
+            ),
+            axis=1,
+        )
         raw_records = df_clean.to_dict(orient="records")
 
         validated_transactions = []
@@ -64,10 +79,18 @@ async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
 async def save_transactions_to_db(
     db: AsyncSession, transactions: list[TransactionCreate]
 ):
-    db_transactions = [Transaction(**record.model_dump()) for record in transactions]
+    # Pydantic models to dictionaries
+    values_to_insert = [record.model_dump() for record in transactions]
 
-    db.add_all(db_transactions)
+    if not values_to_insert:
+        return 0
 
+    # Special postgresql Insert statement
+    stmt = insert(Transaction).values(values_to_insert)
+
+    # Ignore duplicated hash_id
+    stmt = stmt.on_conflict_do_nothing(index_elements=["hash_id"])
+    result = await db.execute(stmt)
     await db.commit()
 
-    return len(db_transactions)
+    return result.rowcount
