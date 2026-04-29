@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app.routers import transaction
+from app.models.transaction import Transaction
+from app.models.user import User
 
 
 @asynccontextmanager
