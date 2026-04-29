@@ -6,6 +6,7 @@ from sqlalchemy import String, Numeric, DateTime, func
 
 from app.database import Base
 
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
@@ -21,3 +22,4 @@ class Transaction(Base):
     date: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
     balance_currency: Mapped[str] = mapped_column(String(3))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    hash_id = Mapped[str] = mapped_column(String, unique=True, index=True)
