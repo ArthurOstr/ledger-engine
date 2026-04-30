@@ -38,4 +38,4 @@ async def health_check():
 
 
 app.include_router(transaction.router)
-app.includer_router(user.router)
+app.include_router(user.router)
