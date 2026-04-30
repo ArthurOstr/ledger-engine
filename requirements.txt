@@ -19,4 +19,7 @@ email-validator
 passlib
 bcrypt==4.0.1
 python-jose[cryptography]
+pytest 
+httpx 
+pytest-asyncio
 
