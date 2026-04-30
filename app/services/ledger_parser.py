@@ -80,7 +80,11 @@ async def save_transactions_to_db(
     db: AsyncSession, transactions: list[TransactionCreate]
 ):
     # Pydantic models to dictionaries
-    values_to_insert = [record.model_dump() for record in transactions]
+    values_to_insert = []
+    for record in transactions:
+        record_dict = record.model_dump()
+        record_dict["owner"] = 1
+        values_to_insert.append(record_dict)
 
     if not values_to_insert:
         return 0

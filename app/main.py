@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import transaction
+from app.routers import transaction, user
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -38,3 +38,4 @@ async def health_check():
 
 
 app.include_router(transaction.router)
+app.includer_router(user.router)
