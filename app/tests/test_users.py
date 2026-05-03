@@ -1,5 +1,6 @@
 import uuid
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
@@ -13,9 +14,11 @@ TestingSessionLocal = async_sessionmaker(
     autocommit=False, autoflush=False, bind=test_engine
 )
 
+pytestmark = pytest.mark.asyncio
+
 
 # The autouse=True flag means this runs automatically for every test in this file
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def prepare_database():
     # Build the tables before the test runs
     async with test_engine.begin() as conn:
