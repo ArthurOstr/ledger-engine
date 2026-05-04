@@ -22,4 +22,5 @@ python-jose[cryptography]
 pytest 
 httpx 
 pytest-asyncio
-
+PyJWT==2.8.0
+jwt
