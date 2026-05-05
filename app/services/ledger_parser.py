@@ -26,12 +26,16 @@ BANK_MAPPING = {
 }
 
 
-def generate_row_hash(date: pd.Timestamp, amount: Decimal, description: str) -> str:
-    raw_string = f"{date}|{amount}|{str(description).strip()}"
+def generate_row_hash(
+    user_id: int, date: pd.Timestamp, amount: Decimal, description: str
+) -> str:
+    raw_string = f"{user_id}|{date}|{amount}|{str(description).strip()}"
     return hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
 
-async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
+async def parse_excel_payload(
+    file: UploadFile, user_id: int
+) -> list[TransactionCreate]:
     contents = await file.read()
 
     try:
@@ -58,7 +62,7 @@ async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
         # Applying hash to the DataFrame
         df_clean["hash_id"] = df_clean.apply(
             lambda row: generate_row_hash(
-                row["date"], row["amount"], row["description"]
+                user_id, row["date"], row["amount"], row["description"]
             ),
             axis=1,
         )
@@ -77,13 +81,13 @@ async def parse_excel_payload(file: UploadFile) -> list[TransactionCreate]:
 
 
 async def save_transactions_to_db(
-    db: AsyncSession, transactions: list[TransactionCreate]
+    db: AsyncSession, transactions: list[TransactionCreate], user_id: int
 ):
     # Pydantic models to dictionaries
     values_to_insert = []
     for record in transactions:
         record_dict = record.model_dump()
-        record_dict["owner"] = 1
+        record_dict["owner_id"] = user_id
         values_to_insert.append(record_dict)
 
     if not values_to_insert:
