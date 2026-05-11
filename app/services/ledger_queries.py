@@ -14,7 +14,7 @@ async def fetch_transaction(
     """
     stmt = (
         select(Transaction)
-        .where(Transaction.user_id == user_id)
+        .where(Transaction.owner_id == user_id)
         .order_by(Transaction.date.desc())
         .limit(limit)
         .offset(offset)
