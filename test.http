@@ -1,0 +1,7 @@
+POST http://localhost:8000/api/users/register
+Content-Type: application/json
+
+{
+  "email": "3Art@egmail.com",
+  "password": "12345678"
+}
