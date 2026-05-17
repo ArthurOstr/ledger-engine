@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import transaction, user
+from app.routers import transaction, user, google_auth
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -39,3 +39,4 @@ async def health_check():
 
 app.include_router(transaction.router)
 app.include_router(user.router)
+app.include_router(google_auth.router)
