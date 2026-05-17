@@ -39,15 +39,11 @@ async def get_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     """
     Extracts the standardized financial data to populate the frontend dashboard.
     """
     records = await fetch_transaction(
-        db=db,
-        user_id=current_user.id,
-        limit=limit,
-        offset=offset
+        db=db, user_id=current_user.id, limit=limit, offset=offset
     )
 
     return records
