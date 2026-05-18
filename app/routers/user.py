@@ -1,15 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.schemas.user import UserCreate, UserResponse
 from app.core.security import get_password_hash, verify_password, create_access_token
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
+@router.get("/me")
+async def verify_session(current_user: User = Depends(get_current_user)):
+    """React pings this load. If the cookie is valid, it returns 200 OK"""
+    return {"email": current_user.email}
+
+@router.post("/logout")
+async def logout_user(response: Response):
+    """Destroys the HTTPOnly cookie"""
+    response.delete_cookie(
+        key="access_token",
+        samesite="lax",
+        secure=False,
+        httponly=True,
+        path="/"
+    )
+    return {"message": "Logged out successfully"}
 
 @router.post("/register", response_model=UserResponse)
 async def register_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -28,11 +45,12 @@ async def register_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     return new_user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
 ):
-
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalars().first()
 
@@ -45,4 +63,14 @@ async def login_for_access_token(
 
     access_token = create_access_token(data={"sub": str(user.email)})
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    response.set_cookie(
+      key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=1800,
+        path="/"
+    )
+
+    return {"message": "Logged in successfully"}

@@ -53,20 +53,20 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
                 status_code=400, detail="Failed to exchange token with Google"
             )
 
-        access_token = token_response.json().get("access_token")
+        google_tokens = token_response.json()
+        google_access_token = google_tokens["access_token"]
 
-        userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+        userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
         userinfo_response = await client.get(
-            userinfo_url, headers={"Authorization": f"Bearer{access_token}"}
+            userinfo_url,
+            headers={"Authorization": f"Bearer {google_access_token}"}
         )
 
         if userinfo_response.status_code != 200:
-            raise HTTPException(
-                status_code=400, detail="failed to fetch user info from Google"
-            )
+            raise HTTPException(status_code=400, detail="Failed to exchange token with Google")
 
-        user_data = userinfo_response.json()
-        google_email = user_data.get("email")
+        userinfo_json = userinfo_response.json()
+        google_email = userinfo_json.get("email")
 
     result = await db.execute(select(User).where(User.email == google_email))
     user = result.scalars().first()
@@ -77,6 +77,18 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
         await db.commit()
         await db.refresh(user)
 
-    jwt_token = create_access_token(data={"sub": str(user.email)})
+    access_token = create_access_token(data={"sub": str(user.email)})
 
-    return RedirectResponse(f"{FRONTEND_SUCCESS_URI}?token={jwt_token}")
+    response = RedirectResponse(url=FRONTEND_SUCCESS_URI)
+
+    response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=1800,
+            path="/"
+        )
+
+    return response
