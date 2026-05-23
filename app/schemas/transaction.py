@@ -3,9 +3,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
+from app.models.transaction import BankSource
+
 
 class TransactionBase(BaseModel):
     date: datetime
+    bank: BankSource
     category: Optional[str] = None
     card: Optional[str] = None
     description: Optional[str] = None
@@ -17,6 +20,10 @@ class TransactionBase(BaseModel):
     transaction_amount: Decimal = Field(..., max_digits=10, decimal_places=2)
     hash_id: str
 
+    mcc: Optional[str] = None
+    commissions: Optional[Decimal] = None
+    cash: Optional[Decimal] = None
+    exchange_rate: Decimal = Field(..., max_digits=10, decimal_places=2)
 
 class TransactionCreate(TransactionBase):
     """Schema for validating incoming data before database insertion."""
