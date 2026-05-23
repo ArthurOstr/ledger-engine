@@ -18,7 +18,15 @@ class Transaction(Base):
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False, index=True
     )
-    bank: Mapped[BankSource] = mapped_column(Enum(BankSource), nullable=False, index=True)
+    bank: Mapped[BankSource] = mapped_column(
+        Enum(
+            BankSource,
+            name="banksource",
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        index=True
+    )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     card: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

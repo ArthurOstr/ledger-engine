@@ -22,8 +22,8 @@ class TransactionBase(BaseModel):
 
     mcc: Optional[str] = None
     commissions: Optional[Decimal] = None
-    cash: Optional[Decimal] = None
-    exchange_rate: Decimal = Field(..., max_digits=10, decimal_places=2)
+    cashback: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
 
 class TransactionCreate(TransactionBase):
     """Schema for validating incoming data before database insertion."""

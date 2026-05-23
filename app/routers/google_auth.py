@@ -86,7 +86,7 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
             value=access_token,
             httponly=True,
             secure=False,
-            samesite="None",
+            samesite="lax",
             max_age=1800,
             path="/"
         )

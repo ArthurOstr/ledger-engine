@@ -73,7 +73,12 @@ async def parse_excel_payload(
 
     try:
         # Reads the file adn turn it into a raw pandas dataframe
-        df = pd.read_excel(io.BytesIO(contents), header=1)
+        df = pd.read_excel(io.BytesIO(contents))
+        headers = set(df.columns)
+
+        # If valid headers aren't found, try Row 1 (PrivatBank default)
+        if not ("Дата і час операції" in headers or "Сума в валюті картки" in headers):
+            df = pd.read_excel(io.BytesIO(contents), header=1)
 
         # Route the file into the correct processing frame
         bank = detect_bank_source(df)
@@ -91,14 +96,14 @@ async def parse_excel_payload(
         for col in DATE_COLUMNS:
             if col in df_clean.columns:
                 df_clean[col] = pd.to_datetime(
-                    df_clean[col], dayfirs=True
+                    df_clean[col], dayfirst=True
                 ).dt.to_pydatetime()
 
         # Type normalization: DECIMALS
         for col in DECIMAL_COLUMNS:
             if col in df_clean.columns:
                 # Strip spaces, turn column to string
-                df_clean[col] = df_clean[col].astype(str).replace(" ", "")
+                df_clean[col] = df_clean[col].astype(str).str.replace(r"\s+", "", regex=True).str.replace(",", ".")
 
                 # Erasing anomalies such as dashes, NaN, and empty values
                 df_clean[col] = df_clean[col].apply(
