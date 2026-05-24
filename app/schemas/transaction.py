@@ -20,7 +20,7 @@ class TransactionBase(BaseModel):
     transaction_amount: Decimal = Field(..., max_digits=10, decimal_places=2)
     hash_id: str
 
-    mcc: Optional[str] = None
+    mcc: Optional[int] = None
     commissions: Optional[Decimal] = None
     cashback: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None
