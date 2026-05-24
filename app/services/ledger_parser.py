@@ -107,7 +107,6 @@ async def parse_excel_payload(
         # --- INTERCEPT: PRINT THE EXACT STRINGS ---
         print("\n=== RAW EXTRACTED HEADERS ===")
         print(df.columns.tolist())
-        print("=============================\n")
 
         # Route the file into the correct processing frame
         bank = detect_bank_source(df)
@@ -120,7 +119,6 @@ async def parse_excel_payload(
 
         # Purge empty or corrupted rows
         df_clean = df_clean.dropna(subset=["amount"])
-        print("=============================\n")
         # Type normalization: DATES
         for col in DATE_COLUMNS:
             if col in df_clean.columns:
@@ -133,7 +131,6 @@ async def parse_excel_payload(
                     dayfirst=True,
                     errors="coerce"
                 )
-        print("==========================END1\n")
         # Type normalization: DECIMALS
         for col in DECIMAL_COLUMNS:
             if col in df_clean.columns:
@@ -144,7 +141,6 @@ async def parse_excel_payload(
                     .str.replace(r"\s+", "", regex=True)
                     .str.replace(",", ".")
                 )
-                print("==========================END2\n")
                 # Erasing anomalies such as dashes, NaN, and empty values
                 df_clean[col] = df_clean[col].apply(
                     lambda x: None if x in ("—", "–", "nan", "None", "") else Decimal(x)
@@ -156,13 +152,11 @@ async def parse_excel_payload(
                 df_clean["currency"] = "UAH"
         if "balance_currency" not in df_clean.columns:
             df_clean["balance_currency"] = "UAH"
-        print("==========================END3\n")
         # Neutralize remaining Nan to avoid SQLAlchemy crashes
         df_clean = df_clean.where(pd.notnull(df_clean), None)
 
         # Inject architectural metadata
         df_clean["bank"] = bank
-        print("==========================END4\n")
         # Applying hash to the DataFrame
         df_clean["hash_id"] = df_clean.apply(
             lambda row: generate_row_hash(
@@ -170,7 +164,6 @@ async def parse_excel_payload(
             ),
             axis=1,
         )
-        print("==========================END5\n")
         # Convert the DatatFrame to and array
         raw_records = df_clean.to_dict(orient="records")
 
