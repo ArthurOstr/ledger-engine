@@ -1,0 +1,34 @@
+import os
+import logging
+from arq.connections import RedisSettings
+
+from app.services.ledger_parser import parse_excel_payload
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("worker")
+
+
+async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
+    logger.info(
+        f"Picked up job for User ID: {user_id}. File size: {len(file_bytes)} bytes."
+    )
+
+    try:
+        transactions = await parse_excel_payload(contents=file_bytes, user_id=user_id)
+        logger.info(f"Successfully extracted {len(transactions)} rows.")
+        return f"Processed {len(transactions)} transactions."
+
+    except Exception as e:
+        logger.exception(f"Fatal error processing file: {str(e)}")
+        raise e
+
+
+class WorkerSettings:
+    redis_settings = RedisSettings.from_dsn(
+        os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    )
+    function = [process_excel_file]

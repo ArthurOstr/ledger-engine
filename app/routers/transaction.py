@@ -1,8 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Depends
+import os
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from arq import create_pool
+from arq.connections import RedisSettings
 
 from app.database import get_db
-from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
 from app.services.ledger_queries import fetch_transaction
 from app.schemas.transaction import TransactionResponse
 from app.core.dependencies import get_current_user
@@ -11,25 +13,43 @@ from app.models.user import User
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
-@router.post("/upload")
+async def get_redis_pool():
+    redis_settings = RedisSettings.from_dsn(
+        os.getenv("REDIS_URL", "redis://redis:6379/0")
+    )
+    return await create_pool(redis_settings)
+
+
+@router.post("/upload", status_code=202)
 async def upload_ledger(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    redis_pool=Depends(get_redis_pool),
     current_user: User = Depends(get_current_user),
 ):
+    # Shield from non-Excel files
+    if not file.filename.endswith((".xls", ".xlsx")):
+        raise HTTPException(
+            status_code=400, detail="Invalid file type. Only .xls or .xlsx allowed"
+        )
 
-    validated_records = await parse_excel_payload(file, current_user.id)
-    inserted_count = await save_transactions_to_db(
-        db, validated_records, current_user.id
-    )
+    try:
+        contents = await file.read()
 
-    return {
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "user_email": current_user.email,
-        "message": "File successfully passed the airlock.",
-        "records_processed": inserted_count,
-    }
+        # Drop payload into the Redis Broker. It must match redis config(currently worker.py)
+        job = await redis_pool.enqueue_job(
+            "process_excel_file", contents, current_user.id
+        )
+
+        return {
+            "filename": file.filename,
+            "user_email": current_user.email,
+            "message": "File successfully passed to the broker.",
+            "job_id": job.job_id,
+            "status": "queued",
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Broker rejection: {str(e)}")
 
 
 @router.get("", response_model=list[TransactionResponse])

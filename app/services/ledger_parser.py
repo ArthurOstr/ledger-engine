@@ -10,7 +10,14 @@ from app.models.transaction import BankSource, Transaction
 from app.schemas.transaction import TransactionBase, TransactionCreate
 
 # Column type definitions
-DECIMAL_COLUMNS = ["amount", "transaction_amount", "balance_after", "commissions", "cashback", "exchange_rate"]
+DECIMAL_COLUMNS = [
+    "amount",
+    "transaction_amount",
+    "balance_after",
+    "commissions",
+    "cashback",
+    "exchange_rate",
+]
 DATE_COLUMNS = ["date"]
 
 # bank translation matrices(dicts)
@@ -66,10 +73,7 @@ def generate_row_hash(
     return hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
 
-async def parse_excel_payload(
-    file: UploadFile, user_id: int
-) -> list[TransactionCreate]:
-    contents = await file.read()
+async def parse_excel_payload(contents: bytes, user_id: int) -> list[TransactionCreate]:
 
     try:
         # Reads the file adn turn it into a raw pandas dataframe
@@ -99,9 +103,7 @@ async def parse_excel_payload(
         # For proper date parsing
 
         df.columns = (
-            df.columns.astype(str)
-            .str.replace(r"\s+", " ", regex=True)
-            .str.strip()
+            df.columns.astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
         )
 
         # --- INTERCEPT: PRINT THE EXACT STRINGS ---
@@ -127,9 +129,7 @@ async def parse_excel_payload(
 
                 # 2. Parse safely. 'coerce' turns unreadable garbage into NaT instead of crashing.
                 df_clean[col] = pd.to_datetime(
-                    df_clean[col],
-                    dayfirst=True,
-                    errors="coerce"
+                    df_clean[col], dayfirst=True, errors="coerce"
                 )
         # Type normalization: DECIMALS
         for col in DECIMAL_COLUMNS:

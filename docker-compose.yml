@@ -22,6 +22,19 @@ services:
       timeout: 3s
       retries: 5
 
+  redis:
+    image: redis:7-alphine
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks: 
+      - ledger_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     restart: on-failure
     build: ./
@@ -38,6 +51,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      REDIS_URL: redis://redis:6379/0
     networks:
       - ledger_network
     healthcheck:
@@ -45,10 +59,32 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
     depends_on:
       db:
         condition: service_healthy
+      redis: 
+        condition: service_healthy
+
+  worker:
+    restart: on-failure 
+    build: ./ 
+    command: arq app.worker.WorkerSettings
+    env_file:
+      - .env 
+    volumes:
+      - .:/app 
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6739/0
+    networks:
+      - ledger_network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
 volumes:
   postgres_data:
 
