@@ -2,7 +2,8 @@ import os
 import logging
 from arq.connections import RedisSettings
 
-from app.services.ledger_parser import parse_excel_payload
+from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
+from app.database import AsyncSessionLocal
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,8 +20,15 @@ async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
 
     try:
         transactions = await parse_excel_payload(contents=file_bytes, user_id=user_id)
-        logger.info(f"Successfully extracted {len(transactions)} rows.")
-        return f"Processed {len(transactions)} transactions."
+
+        # Link to database
+        async with AsyncSessionLocal() as db_session:
+            inserted_count = await save_transactions_to_db(
+                db=db_session, transactions=transactions, user_id=user_id
+            )
+
+        logger.info(f"Successfully extracted {inserted_count} rows.")
+        return f"Processed {inserted_count} transactions."
 
     except Exception as e:
         logger.exception(f"Fatal error processing file: {str(e)}")
@@ -31,4 +39,4 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(
         os.getenv("REDIS_URL", "redis://localhost:6379/0")
     )
-    function = [process_excel_file]
+    functions = [process_excel_file]
