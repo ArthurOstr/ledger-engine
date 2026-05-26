@@ -2,6 +2,7 @@ import os
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from arq import create_pool
+from arq.jobs import Job, JobStatus
 from arq.connections import RedisSettings
 
 from app.database import get_db
@@ -67,3 +68,16 @@ async def get_transaction(
     )
 
     return records
+
+
+@router.get("/status/{job_id}")
+async def get_upload_status(job_id: str, redis_pool=Depends(get_redis_pool)):
+    # Look up the specific job in the Redis RAM
+    job = Job(job_id, redis_pool)
+
+    status = await job.status()
+    if status == JobStatus.not_found:
+        return {"job_id": job_id, "status": "failed_or_expired"}
+
+    # JobStatus is an enum: queued, in_progress, deferred, complete, not_found
+    return {"job_id": job_id, "status": status.value}
