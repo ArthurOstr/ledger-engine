@@ -19,7 +19,7 @@ async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
     )
 
     try:
-        transactions = await parse_excel_payload(contents=file_bytes, user_id=user_id)
+        transactions = parse_excel_payload(contents=file_bytes, user_id=user_id)
 
         # Link to database
         async with AsyncSessionLocal() as db_session:
