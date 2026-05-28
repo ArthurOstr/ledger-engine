@@ -9,6 +9,27 @@ from sqlalchemy.dialects.postgresql import insert
 from app.models.transaction import BankSource, Transaction
 from app.schemas.transaction import TransactionBase, TransactionCreate
 
+# Code provided by Mono to sort transactions
+MCC_MAPPING = {
+    5411: "Супермаркети та продукти",
+    5814: "Кафе та ресторани",
+    5812: "Кафе та ресторани",
+    4121: "Транспорт",
+    5541: "Авто",
+    5542: "Авто",
+    5912: "Аптеки та медицина",
+    8099: "Аптеки та медицина",
+}
+
+CATEGORY_RULES = {
+    "steam": "Розваги",
+    "аврора": "Дім та ремонт",
+    "зняття готівки": "Зняття готівки",
+    "переказ": "Перекази",
+    "від:": "Перекази",
+    "на свою картку": "Перекази",
+}
+
 # Column type definitions
 DECIMAL_COLUMNS = [
     "amount",
@@ -49,7 +70,7 @@ PRIVAT_MAPPING = {
 
 
 # origin router
-def detect_bank_source(df: pd.DataFrame) -> str:
+def detect_bank_source(df: pd.DataFrame) -> BankSource:
     """Inspects the columns of the uploaded dataframe to indentify the bank"""
     headers = set(df.columns)
     if "Дата і час операції" in headers or "MCC" in headers:
@@ -118,6 +139,13 @@ def _apply_bank_schema(df: pd.DataFrame) -> tuple[pd.DataFrame, BankSource]:
     existing_cols = [col for col in mapping.values() if col in df.columns]
     df_clean = df[existing_cols].copy()
 
+    # Preventing KeyError if mapping fails to secure a column head
+    if "amount" not in df_clean.columns:
+        raise HTTPException(
+            status_code=400,
+            detail="Critical error: Primary amount column couldn't be translated"
+        )
+
     # Purge empty or corrupted rows
     df_clean = df_clean.dropna(subset=["amount"])
     return df_clean, bank
@@ -149,6 +177,43 @@ def _sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].apply(
                 lambda x: None if x in ("—", "–", "nan", "None", "") else Decimal(x)
             )
+    return df
+
+# Categorization data(Cascade way to do that)
+def _apply_categorization(df: pd.DataFrame, bank: BankSource) -> pd.DataFrame:
+    """Applies MCC-first, text is the second"""
+
+    # Column validation
+    if "category" not in df.columns:
+        df["category"] = None
+
+    def determine_category(row):
+        # Privatbank native check
+        if pd.notna(row.get("category")) and str(row.get("category")).strip() != "":
+            return str(row["category"]).strip()
+
+        # Monobank MCC code lookup
+        if pd.notna(row.get("mcc:")):
+            try:
+                # Pandas could save floats instead of integers(such as 5411.0)
+                mcc_code = int(float(row["mcc"]))
+                if mcc_code in MCC_MAPPING:
+                    return MCC_MAPPING[mcc_code]
+
+            except (ValueError, TypeError):
+                pass
+
+        # Text matching fallback
+        desc = str(row.get("description", "")).lower()
+        for keyword, assigned_category in CATEGORY_RULES.items():
+            if keyword in desc:
+                return assigned_category
+
+        return "Інше"
+
+    # Apply logic row by row
+    df["category"] = df.apply(determine_category, axis=1)
+
     return df
 
 # Enrichment and aligning
@@ -186,12 +251,17 @@ def parse_excel_payload(contents: bytes, user_id: int) -> list[TransactionCreate
         # 3. Sanitize
         df = _sanitize_data(df)
 
-        # 4. Enrich and hash
+        # 4. Categorize
+        df = _apply_categorization(df, bank)
+
+        # 5. Enrich and hash
         raw_records = _enrich_and_hash(df, user_id, bank)
 
         return [TransactionCreate(**record) for record in raw_records]
+
     except HTTPException:
         raise
+
     except Exception as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to parse Excel file: {str(e)}"
