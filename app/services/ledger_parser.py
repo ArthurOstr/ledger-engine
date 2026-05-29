@@ -1,6 +1,7 @@
 import pandas as pd
 import io
 import hashlib
+import re
 from decimal import Decimal
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,12 +47,9 @@ MONO_MAPPING = {
     "Дата i час операції": "date",
     "Деталі операції": "description",
     "MCC": "mcc",
-    "Сума в валюті картки (UAH)": "amount",
     "Сума в валюті операції": "transaction_amount",
     "Валюта": "transaction_currency",
     "Курс": "exchange_rate",
-    "Сума комісій (UAH)": "commissions",
-    "Сума кешбеку (UAH)": "cashback",
     "Залишок після операції": "balance_after",
 }
 
@@ -132,14 +130,46 @@ def _extract_raw_dataframe(contents: bytes) -> pd.DataFrame:
 def _apply_bank_schema(df: pd.DataFrame) -> tuple[pd.DataFrame, BankSource]:
     # Route the file into the correct processing frame
     bank = detect_bank_source(df)
-    mapping = MONO_MAPPING if bank == BankSource.MONOBANK else PRIVAT_MAPPING
+
+    if bank == BankSource.MONOBANK:
+        extracted_currency = "UAH"
+        dynamic_renames = {}
+
+        # Regex scanner
+        for col in df.columns:
+            col_str = str(col)
+            # Capture 3 letters that matter to find the currency we need
+            amount_match = re.search(r"Сума в валюті картки \(([A-Z]{3})\)", col_str)
+
+            if amount_match:
+                extracted_currency = amount_match.group(1)
+                dynamic_renames[col_str] = "amount"
+            elif col_str.startswith("Сума комісій"):
+                dynamic_renames[col_str] = "commissions"
+            elif col_str.startswith("Сума кешбеку"):
+               dynamic_renames[col_str] = "cashback"
 
     # Apply translation
-    df = df.rename(columns=mapping)
-    existing_cols = [col for col in mapping.values() if col in df.columns]
+        df = df.rename(columns=dynamic_renames)
+        df = df.rename(columns=MONO_MAPPING)
+
+        # Injects dynamically extracted currency into every row
+        df["currency"] = extracted_currency
+
+    else:
+        df = df.rename(columns=PRIVAT_MAPPING)
+
+    # Define the strict architecture of what is allowed to pass
+    FINAL_COLUMNS = [
+            "date", "category", "card", "description", "amount", "currency",
+            "transaction_amount", "transaction_currency", "balance_after",
+            "balance_currency", "mcc", "commissions", "cashback", "exchange_rate"
+    ]
+
+    existing_cols = [col for col in FINAL_COLUMNS if col in df.columns]
     df_clean = df[existing_cols].copy()
 
-    # Preventing KeyError if mapping fails to secure a column head
+    # Preventing KeyError if mapping fails to secure a column head. THE AIRLOCK
     if "amount" not in df_clean.columns:
         raise HTTPException(
             status_code=400,
@@ -219,11 +249,11 @@ def _apply_categorization(df: pd.DataFrame, bank: BankSource) -> pd.DataFrame:
 # Enrichment and aligning
 def _enrich_and_hash(df: pd.DataFrame, user_id: int, bank: BankSource) -> list[dict]:
     """Injects missing fields and applies the cryptographic hash"""
+
     # Data patching(to consolidate the data from different types of statement)
-    if bank == BankSource.MONOBANK and "currency" not in df.columns:
-        df["currency"] = "UAH"
     if "balance_currency" not in df.columns:
         df["balance_currency"] = "UAH"
+
     # Neutralize remaining Nan to avoid SQLAlchemy crashes
     df = df.where(pd.notnull(df), None)
 
