@@ -96,7 +96,7 @@ def _extract_raw_dataframe(contents: bytes) -> pd.DataFrame:
 
         # Check if Monobank or Privatbank anchors remain
         if (
-                "Дата і час операції" in row_strings
+                "Дата i час операції" in row_strings
                 or "Сума в валюті картки" in row_strings
         ):
             header_row_index = idx
@@ -209,6 +209,15 @@ def _apply_categorization(df: pd.DataFrame, bank: BankSource, user_rules: dict) 
         df["category"] = None
 
     def determine_category(row):
+        # Dynamic text matching fallback
+
+        desc = str(row.get("description", "")).lower()
+
+        # Loop through the custom dictionary downloaded from PostgreSQL
+        for keyword, assigned_category in user_rules.items():
+            if keyword in desc:
+                return assigned_category
+
         # Privatbank native check
         if pd.notna(row.get("category")) and str(row.get("category")).strip() != "":
             return str(row["category"]).strip()
@@ -223,13 +232,7 @@ def _apply_categorization(df: pd.DataFrame, bank: BankSource, user_rules: dict) 
 
             except (ValueError, TypeError):
                 pass
-        # Dynamic text matching fallback
-        desc = str(row.get("description", "")).lower()
 
-        # Loop through the custom dictionary downloaded from PostgreSQL
-        for keyword, assigned_category in user_rules.items():
-            if keyword in desc:
-                return assigned_category
 
         return "Інше"
 
