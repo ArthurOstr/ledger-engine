@@ -82,7 +82,14 @@ def test_parse_excel_payload_mono_success():
     file_bytes = create_mock_excel(MONO_DATA, include_garbage_header=True)
     test_user_id = 1
 
-    transactions = parse_excel_payload(file_bytes, test_user_id)
+    # Mocking the custom rules fetched from the database
+    mock_user_rules = {
+        "steam": "Розваги",
+        "аврора": "Дім та ремонт"
+    }
+
+    # Passing the new required user_rules argument
+    transactions = parse_excel_payload(file_bytes, test_user_id, user_rules=mock_user_rules)
 
     assert len(transactions) == 2
     assert transactions[0].bank == BankSource.MONOBANK
@@ -91,7 +98,6 @@ def test_parse_excel_payload_mono_success():
     # Proves regex category rule worked ("аврора" -> "Дім та ремонт")
     assert transactions[0].category == "Дім та ремонт"
 
-    # Proves string stripping and Decimal coercion handled the "—" dash
     assert transactions[0].exchange_rate is None
     assert transactions[1].exchange_rate == Decimal("39.50")
 
@@ -100,22 +106,21 @@ def test_parse_excel_payload_privat_success():
     file_bytes = create_mock_excel(PRIVAT_DATA)
     test_user_id = 1
 
-    transactions = parse_excel_payload(file_bytes, test_user_id)
+    # Empty rules dict for tests that don't rely on custom text matching
+    transactions = parse_excel_payload(file_bytes, test_user_id, user_rules={})
 
     assert len(transactions) == 2
     assert transactions[0].bank == BankSource.PRIVATBANK
     assert transactions[0].amount == Decimal("-200.00")
-    # Proves Privatbank native category was retained
     assert transactions[0].category == "Продукти"
 
 
 def test_parse_excel_payload_corrupted_file():
-    # Feed raw string bytes instead of a valid zipped Excel structure
     garbage_bytes = b"This is not an excel file, this is just a string."
     test_user_id = 1
 
     with pytest.raises(HTTPException) as excinfo:
-        parse_excel_payload(garbage_bytes, test_user_id)
+        parse_excel_payload(garbage_bytes, test_user_id, user_rules={})
 
     assert excinfo.value.status_code == 400
     assert "Failed to parse Excel file" in excinfo.value.detail
@@ -126,8 +131,8 @@ def test_hash_id_determinism():
     test_user_id = 99
 
     # Parse the exact same file twice
-    transactions_run_1 = parse_excel_payload(file_bytes, test_user_id)
-    transactions_run_2 = parse_excel_payload(file_bytes, test_user_id)
+    transactions_run_1 = parse_excel_payload(file_bytes, test_user_id, user_rules={})
+    transactions_run_2 = parse_excel_payload(file_bytes, test_user_id, user_rules={})
 
     # The cryptographic hashes must be mathematically identical
     assert transactions_run_1[0].hash_id == transactions_run_2[0].hash_id
