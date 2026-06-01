@@ -22,15 +22,6 @@ MCC_MAPPING = {
     8099: "Аптеки та медицина",
 }
 
-CATEGORY_RULES = {
-    "steam": "Розваги",
-    "аврора": "Дім та ремонт",
-    "зняття готівки": "Зняття готівки",
-    "переказ": "Перекази",
-    "від:": "Перекази",
-    "на свою картку": "Перекази",
-}
-
 # Column type definitions
 DECIMAL_COLUMNS = [
     "amount",
@@ -210,7 +201,7 @@ def _sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # Categorization data(Cascade way to do that)
-def _apply_categorization(df: pd.DataFrame, bank: BankSource) -> pd.DataFrame:
+def _apply_categorization(df: pd.DataFrame, bank: BankSource, user_rules: dict) -> pd.DataFrame:
     """Applies MCC-first, text is the second"""
 
     # Column validation
@@ -223,7 +214,7 @@ def _apply_categorization(df: pd.DataFrame, bank: BankSource) -> pd.DataFrame:
             return str(row["category"]).strip()
 
         # Monobank MCC code lookup
-        if pd.notna(row.get("mcc:")):
+        if pd.notna(row.get("mcc")):
             try:
                 # Pandas could save floats instead of integers(such as 5411.0)
                 mcc_code = int(float(row["mcc"]))
@@ -232,10 +223,11 @@ def _apply_categorization(df: pd.DataFrame, bank: BankSource) -> pd.DataFrame:
 
             except (ValueError, TypeError):
                 pass
-
-        # Text matching fallback
+        # Dynamic text matching fallback
         desc = str(row.get("description", "")).lower()
-        for keyword, assigned_category in CATEGORY_RULES.items():
+
+        # Loop through the custom dictionary downloaded from PostgreSQL
+        for keyword, assigned_category in user_rules.items():
             if keyword in desc:
                 return assigned_category
 
@@ -269,7 +261,7 @@ def _enrich_and_hash(df: pd.DataFrame, user_id: int, bank: BankSource) -> list[d
 
     return df.to_dict(orient="records")
 
-def parse_excel_payload(contents: bytes, user_id: int) -> list[TransactionCreate]:
+def parse_excel_payload(contents: bytes, user_id: int, user_rules: dict) -> list[TransactionCreate]:
     """The main assembly line for incoming Excel files"""
     try:
         # 1. Extract
@@ -282,7 +274,7 @@ def parse_excel_payload(contents: bytes, user_id: int) -> list[TransactionCreate
         df = _sanitize_data(df)
 
         # 4. Categorize
-        df = _apply_categorization(df, bank)
+        df = _apply_categorization(df, bank, user_rules)
 
         # 5. Enrich and hash
         raw_records = _enrich_and_hash(df, user_id, bank)
