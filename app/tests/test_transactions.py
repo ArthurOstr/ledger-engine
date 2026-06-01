@@ -5,7 +5,7 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.main import app
 from app.database import get_db, engine, Base
@@ -146,3 +146,53 @@ async def test_tenant_isolation_get_transactions():
     resp_b = await client_b.get("/api/transactions")
     assert resp_b.status_code == 200
     assert len(resp_b.json()) == 0
+
+
+async def test_tenant_isolation_pagination():
+    client, user_id = await create_auth_client()
+
+    # Inject a massive payload to simulate months of heavy banking history
+    async with TestingSessionLocal() as db:
+        transactions = []
+        base_time = datetime.now()
+        for i in range(100):
+            # Shift the index by 1 to avoid the "-0.00" string serialization quirk
+            amount_val = Decimal(f"-{i + 1}.00")
+            tx = Transaction(
+                owner_id=user_id,
+                bank=BankSource.MONOBANK,
+                amount=amount_val,
+                currency="UAH",
+                balance_after=Decimal("900.00"),
+                transaction_currency="UAH",
+                transaction_amount=amount_val,
+                # Stagger the dates so the .order_by(desc) is completely deterministic
+                date=base_time - timedelta(days=i),
+                balance_currency="UAH",
+                hash_id=f"hash_page_{user_id}_{i}_{uuid.uuid4()}"
+            )
+            transactions.append(tx)
+
+        db.add_all(transactions)
+        await db.commit()
+
+    # Query Page 1: The mathematical boundary holds at 50
+    resp_page_1 = await client.get("/api/transactions?limit=50&offset=0")
+    assert resp_page_1.status_code == 200
+    data_page_1 = resp_page_1.json()
+    assert len(data_page_1) == 50
+    # Proves the most recent transaction (i=0) was loaded first
+    assert data_page_1[0]["amount"] == "-1.00"
+
+    # Query Page 2: The offset correctly shifts the window
+    resp_page_2 = await client.get("/api/transactions?limit=50&offset=50")
+    assert resp_page_2.status_code == 200
+    data_page_2 = resp_page_2.json()
+    assert len(data_page_2) == 50
+    # Proves the exact starting point of the next block (i=50)
+    assert data_page_2[0]["amount"] == "-51.00"
+
+    # Query Page 3: Out of bounds returns an empty array, not a crash
+    resp_page_3 = await client.get("/api/transactions?limit=50&offset=100")
+    assert resp_page_3.status_code == 200
+    assert len(resp_page_3.json()) == 0

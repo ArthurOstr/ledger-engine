@@ -22,7 +22,7 @@ async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
 
     try:
         async with AsyncSessionLocal() as db_session:
-
+            
             # Download the specific user's rules from PostgreSQL
             stmt = select(CategoryRule).where(
                 CategoryRule.owner_id == user_id,
