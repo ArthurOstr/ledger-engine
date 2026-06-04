@@ -1,3 +1,4 @@
+import os
 import uuid
 import pytest
 import pytest_asyncio
@@ -15,10 +16,11 @@ from app.models.user import User
 
 # --- DB SETUP ---
 # Destroy connections after every query to guarantee clean test state
-test_engine = create_async_engine(engine.url, poolclass=NullPool)
-TestingSessionLocal = async_sessionmaker(
-    autocommit=False, autoflush=False, bind=test_engine
-)
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise RuntimeError("CRITICAL: TEST_DATABASE_URL is not set. Aborting to protect development data.")
+
+test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
 pytestmark = pytest.mark.asyncio
 

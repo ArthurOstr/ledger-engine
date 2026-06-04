@@ -1,10 +1,14 @@
 import os
 import logging
+from sqlalchemy import text
 from arq.connections import RedisSettings
 from sqlalchemy.future import select
 
 from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
 from app.database import AsyncSessionLocal
+
+from app.models.user import User
+from app.models.transaction import Transaction
 from app.models.category_rule import CategoryRule
 
 logging.basicConfig(
@@ -22,11 +26,17 @@ async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
 
     try:
         async with AsyncSessionLocal() as db_session:
-            
+
+            # KERNEL KEY INJECTION
+            # Set the PostgreSQL session variable so RLS allows worker to see the user's data
+            await db_session.execute(
+                text("SET LOCAL app.current_user_id = :user_id"), {"user_id": user_id}
+            )
+
             # Download the specific user's rules from PostgreSQL
             stmt = select(CategoryRule).where(
                 CategoryRule.owner_id == user_id,
-                CategoryRule.is_active == True,
+                CategoryRule.is_active,
             )
 
             result = await db_session.execute(stmt)
@@ -37,14 +47,12 @@ async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
 
             # Raw files and the custom rules are going to Pandas parser
             transactions = parse_excel_payload(
-                contents=file_bytes,
-                user_id=user_id,
-                user_rules=user_rules
+                contents=file_bytes, user_id=user_id, user_rules=user_rules
             )
 
         # Saving to the database
         inserted_count = await save_transactions_to_db(
-                db=db_session, transactions=transactions, user_id=user_id
+            db=db_session, transactions=transactions, user_id=user_id
         )
 
         logger.info(f"Successfully extracted {inserted_count} rows.")

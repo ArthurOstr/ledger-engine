@@ -1,3 +1,4 @@
+import os
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, AsyncMock
@@ -11,10 +12,11 @@ from app.database import get_db, engine, Base
 from app.models.user import User
 
 # --- DB SETUP ---
-test_engine = create_async_engine(engine.url, poolclass=NullPool)
-TestingSessionLocal = async_sessionmaker(
-    autocommit=False, autoflush=False, bind=test_engine
-)
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise RuntimeError("CRITICAL: TEST_DATABASE_URL is not set. Aborting to protect development data.")
+
+test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
 pytestmark = pytest.mark.asyncio
 
