@@ -1,14 +1,13 @@
 import os
 import logging
 from sqlalchemy import text
+from functools import wraps
+from sqlalchemy.ext.asyncio import AsyncSession
 from arq.connections import RedisSettings
 from sqlalchemy.future import select
 
 from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
 from app.database import AsyncSessionLocal
-
-from app.models.user import User
-from app.models.transaction import Transaction
 from app.models.category_rule import CategoryRule
 
 logging.basicConfig(
@@ -18,37 +17,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger("worker")
 
+def with_db_session(func):
+    """
+   Reusable security and lifecycle wrapper for background tasks.
+   The main purpose of this decorator is to isolate connection with prod adn test database.
+    """
+    @wraps(func)
+    async def wrapper(ctx, *args, **kwargs):
+        db_session = ctx.get("db_session")
+        is_test_session = db_session is not None
 
-async def process_excel_file(ctx, file_bytes: bytes, user_id: int):
+        if is_test_session:
+            return await func(ctx, db_session, *args, **kwargs)
+
+        async with AsyncSessionLocal() as fresh_session:
+            try:
+                return await func(ctx, fresh_session, *args, **kwargs)
+            finally:
+                await fresh_session.close()
+    return wrapper
+
+@with_db_session
+async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, user_id: int):
     logger.info(
         f"Picked up job for User ID: {user_id}. File size: {len(file_bytes)} bytes."
     )
 
     try:
-        async with AsyncSessionLocal() as db_session:
+        # KERNEL KEY INJECTION
+        # Set the PostgreSQL session variable so RLS allows worker to see the user's data
+        await db_session.execute(
+            text("SET LOCAL app.current_user_id = :user_id"), {"user_id": user_id}
+        )
 
-            # KERNEL KEY INJECTION
-            # Set the PostgreSQL session variable so RLS allows worker to see the user's data
-            await db_session.execute(
-                text("SET LOCAL app.current_user_id = :user_id"), {"user_id": user_id}
-            )
+        # Download the specific user's rules from PostgreSQL
+        stmt = select(CategoryRule).where(
+            CategoryRule.owner_id == user_id,
+            CategoryRule.is_active,
+        )
 
-            # Download the specific user's rules from PostgreSQL
-            stmt = select(CategoryRule).where(
-                CategoryRule.owner_id == user_id,
-                CategoryRule.is_active,
-            )
+        result = await db_session.execute(stmt)
+        rules_object = result.scalars().all()
 
-            result = await db_session.execute(stmt)
-            rules_object = result.scalars().all()
+        # Convert db object into Python dict
+        user_rules = {rule.keyword: rule.assigned_category for rule in rules_object}
 
-            # Convert db object into Python dict
-            user_rules = {rule.keyword: rule.assigned_category for rule in rules_object}
-
-            # Raw files and the custom rules are going to Pandas parser
-            transactions = parse_excel_payload(
-                contents=file_bytes, user_id=user_id, user_rules=user_rules
-            )
+        # Raw files and the custom rules are going to Pandas parser
+        transactions = parse_excel_payload(
+            contents=file_bytes, user_id=user_id, user_rules=user_rules
+        )
 
         # Saving to the database
         inserted_count = await save_transactions_to_db(

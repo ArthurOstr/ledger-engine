@@ -8,33 +8,6 @@ from sqlalchemy.pool import NullPool
 from app.main import app
 from app.database import get_db, engine, Base
 
-# Create a special test engine that destroys connections after every query
-test_engine = create_async_engine(engine.url, poolclass=NullPool)
-TestingSessionLocal = async_sessionmaker(
-    autocommit=False, autoflush=False, bind=test_engine
-)
-
-pytestmark = pytest.mark.asyncio
-
-
-# The autouse=True flag means this runs automatically for every test in this file
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_database():
-    # Build the tables before the test runs
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield
-
-    # Destroy the tables after the test finishes to guarantee a clean slate
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-# Intercept FastAPI's database request and hand it our safe test engine
-async def override_get_db():
-    async with TestingSessionLocal() as session:
-        yield session
 
 
 # Apply the interceptor to the application

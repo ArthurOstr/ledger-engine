@@ -1,45 +1,15 @@
-import os
 import uuid
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 from decimal import Decimal
 from datetime import datetime, timedelta
 
+from app.tests.conftest import TestingSessionLocal
 from app.main import app
-from app.database import get_db, engine, Base
 from app.routers.transaction import get_redis_pool
 from app.models.transaction import Transaction, BankSource
 from app.models.user import User
-
-# --- DB SETUP ---
-# Destroy connections after every query to guarantee clean test state
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-if not TEST_DATABASE_URL:
-    raise RuntimeError("CRITICAL: TEST_DATABASE_URL is not set. Aborting to protect development data.")
-
-test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
-
-pytestmark = pytest.mark.asyncio
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_database():
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-async def override_get_db():
-    async with TestingSessionLocal() as session:
-        yield session
-
-
-app.dependency_overrides[get_db] = override_get_db
 
 
 # --- REDIS MOCKING ARCHITECTURE ---

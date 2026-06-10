@@ -1,36 +1,12 @@
 import io
-import pytest
-import pytest_asyncio
 import pandas as pd
 from unittest.mock import patch
-
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 from sqlalchemy.future import select
 
+from app.tests.conftest import TestingSessionLocal
 from app.worker import process_excel_file
-from app.database import engine, Base
 from app.models.user import User
 from app.models.transaction import Transaction
-from app.models.category_rule import CategoryRule
-
-# --- DB SETUP ---
-test_engine = create_async_engine(engine.url, poolclass=NullPool)
-TestingSessionLocal = async_sessionmaker(
-    autocommit=False, autoflush=False, bind=test_engine, expire_on_commit=False
-)
-
-pytestmark = pytest.mark.asyncio
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_database():
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
 
 # --- MOCK FACTORY ---
 def create_mock_excel() -> bytes:
@@ -66,7 +42,7 @@ async def test_worker_process_excel_file():
         await db.commit()
 
         # We tell the engine that "аврора" should override the bank's MCC
-        rule = CategoryRule(
+        rule =  CategoryRule(
             owner_id=user.id,
             keyword="аврора",
             assigned_category="Custom Home Repair",

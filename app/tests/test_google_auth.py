@@ -4,19 +4,14 @@ import pytest_asyncio
 from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport, Response
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 from sqlalchemy.future import select
 
 from app.main import app
 from app.database import get_db, engine, Base
 from app.models.user import User
 
-# --- DB SETUP ---
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 if not TEST_DATABASE_URL:
     raise RuntimeError("CRITICAL: TEST_DATABASE_URL is not set. Aborting to protect development data.")
-
-test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
 pytestmark = pytest.mark.asyncio
 
