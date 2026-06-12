@@ -1,21 +1,10 @@
 import uuid
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
 
 from app.main import app
-from app.database import get_db, engine, Base
 
-
-
-# Apply the interceptor to the application
-app.dependency_overrides[get_db] = override_get_db
-
-# Tell pytest to run these asynchronously
 pytestmark = pytest.mark.asyncio
-
 
 # --- SYSTEM HEALTH TESTS ---
 

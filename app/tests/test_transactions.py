@@ -1,16 +1,16 @@
 import uuid
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from app.tests.conftest import TestingSessionLocal
 from app.main import app
+from app.tests.conftest import TestingSessionLocal
 from app.routers.transaction import get_redis_pool
 from app.models.transaction import Transaction, BankSource
 from app.models.user import User
 
+pytestmark = pytest.mark.asyncio
 
 # --- REDIS MOCKING ARCHITECTURE ---
 class MockJob:
@@ -29,7 +29,10 @@ async def override_get_redis_pool():
 
 
 # Intercept the FastAPI dependency so we don't need a real Redis container
-app.dependency_overrides[get_redis_pool] = override_get_redis_pool
+@pytest.fixture(autouse=True)
+def apply_redis_mock():
+    app.dependency_overrides[get_redis_pool] = override_get_redis_pool
+    yield
 
 
 # --- HELPER FACTORY ---

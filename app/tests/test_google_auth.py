@@ -1,37 +1,13 @@
-import os
 import pytest
-import pytest_asyncio
 from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport, Response
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.future import select
 
 from app.main import app
-from app.database import get_db, engine, Base
 from app.models.user import User
-
-if not TEST_DATABASE_URL:
-    raise RuntimeError("CRITICAL: TEST_DATABASE_URL is not set. Aborting to protect development data.")
+from app.tests.conftest import TestingSessionLocal
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_database():
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-async def override_get_db():
-    async with TestingSessionLocal() as session:
-        yield session
-
-
-app.dependency_overrides[get_db] = override_get_db
-
 
 # --- TESTS: OAUTH GATEWAY ---
 

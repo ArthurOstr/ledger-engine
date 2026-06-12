@@ -9,6 +9,8 @@ from sqlalchemy.future import select
 from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
 from app.database import AsyncSessionLocal
 from app.models.category_rule import CategoryRule
+from app.models.user import User
+from app.models.transaction import Transaction
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,8 +48,9 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
     try:
         # KERNEL KEY INJECTION
         # Set the PostgreSQL session variable so RLS allows worker to see the user's data
+        safe_user_id = str(int(user_id))
         await db_session.execute(
-            text("SET LOCAL app.current_user_id = :user_id"), {"user_id": user_id}
+            text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)")
         )
 
         # Download the specific user's rules from PostgreSQL

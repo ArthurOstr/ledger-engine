@@ -1,4 +1,5 @@
 import io
+import pytest
 import pandas as pd
 from unittest.mock import patch
 from sqlalchemy.future import select
@@ -7,6 +8,9 @@ from app.tests.conftest import TestingSessionLocal
 from app.worker import process_excel_file
 from app.models.user import User
 from app.models.transaction import Transaction
+from app.models.category_rule import CategoryRule
+
+pytestmark = pytest.mark.asyncio
 
 # --- MOCK FACTORY ---
 def create_mock_excel() -> bytes:
@@ -32,11 +36,10 @@ def create_mock_excel() -> bytes:
 
 # --- TESTS: WORKER EXECUTION ---
 
-# Patch the worker's internal database session to strictly use our isolated test engine
-@patch("app.worker.AsyncSessionLocal", new=TestingSessionLocal)
 async def test_worker_process_excel_file():
-    # 1. Forge a user and a custom rule using your exact models
     async with TestingSessionLocal() as db:
+
+        # Forge a user and a custom rule using your exact models
         user = User(email="worker_test@example.com", hashed_password="hashed")
         db.add(user)
         await db.commit()
@@ -53,8 +56,10 @@ async def test_worker_process_excel_file():
 
     file_bytes = create_mock_excel()
 
+    test_context = {"db_session": db}
+
     # 2. Execute the background worker directly
-    result_message = await process_excel_file(ctx={}, file_bytes=file_bytes, user_id=user.id)
+    result_message = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
 
     assert "Processed 1 transactions." in result_message
 
