@@ -3,6 +3,7 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from decimal import Decimal
 from datetime import datetime, timedelta
+from sqlalchemy import text
 
 from app.main import app
 from app.tests.conftest import TestingSessionLocal
@@ -95,6 +96,7 @@ async def test_tenant_isolation_get_transactions():
 
     # Inject a transaction strictly belonging to User A into the macro-system
     async with TestingSessionLocal() as db:
+        await db.execute(text(f"SELECT set_config('app.current_user_id', '{user_a_id}', true)"))
         tx = Transaction(
             owner_id=user_a_id,
             bank=BankSource.MONOBANK,
@@ -128,6 +130,7 @@ async def test_tenant_isolation_pagination():
 
     # Inject a massive payload to simulate months of heavy banking history
     async with TestingSessionLocal() as db:
+        await db.execute(text(f"SELECT set_config('app.current_user_id', '{user_id}', true)"))
         transactions = []
         base_time = datetime.now()
         for i in range(100):

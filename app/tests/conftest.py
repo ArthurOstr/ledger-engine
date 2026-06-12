@@ -1,11 +1,9 @@
 import os
 import pytest 
 import pytest_asyncio
-import asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
-from alembic import command
-from alembic.config import Config
 
 
 from app.main import app
@@ -30,16 +28,27 @@ TestingSessionLocal = async_sessionmaker(
 @pytest_asyncio.fixture(autouse=True, scope="function")
 async def prepare_database():
     """Builds and drops tables per test execution using Alembic to perfectly mirror production on the test engine"""
-    alembic_cfg = Config("alembic.ini")
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    alembic_cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
-    try:
-        await asyncio.to_thread(
-        command.upgrade, alembic_cfg, "head")
-        yield
+        await conn.execute(text("ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;"))
+        await conn.execute(text("ALTER TABLE transactions FORCE ROW LEVEL SECURITY;"))
+        await conn.execute(text("""
+            CREATE POLICY tenant_isolation_policy ON transactions
+            FOR ALL
+            USING (owner_id = current_setting('app.current_user_id', true)::integer);
+        """))
 
-    finally:
-        await asyncio.to_thread(command.downgrade, alembic_cfg, "base")
+        await conn.execute(text("ALTER TABLE category_rules ENABLE ROW LEVEL SECURITY;"))
+        await conn.execute(text("ALTER TABLE category_rules FORCE ROW LEVEL SECURITY;"))
+        await conn.execute(text("""
+            CREATE POLICY tenant_isolation_policy_rules ON category_rules
+            FOR ALL
+            USING (owner_id = current_setting('app.current_user_id', true)::integer);
+        """))
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.fixture(autouse=True)
 def override_fastapi_dependecies():

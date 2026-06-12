@@ -1,7 +1,7 @@
 import io
 import pytest
 import pandas as pd
-from unittest.mock import patch
+from sqlalchemy import text
 from sqlalchemy.future import select
 
 from app.tests.conftest import TestingSessionLocal
@@ -43,6 +43,8 @@ async def test_worker_process_excel_file():
         user = User(email="worker_test@example.com", hashed_password="hashed")
         db.add(user)
         await db.commit()
+
+        await db.execute(text(f"SELECT set_config('app.current_user_id', '{user.id}', true)"))
 
         # We tell the engine that "аврора" should override the bank's MCC
         rule =  CategoryRule(
