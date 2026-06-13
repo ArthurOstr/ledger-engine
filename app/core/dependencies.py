@@ -1,6 +1,7 @@
 import jwt
 from fastapi import Request, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from sqlalchemy.future import select
 
 from app.database import get_db
@@ -33,9 +34,10 @@ async def get_current_user(
         # catches expired tokens
         raise credentials_exception
 
-    # call database to ensure that user hasn't been deleted
     result = await db.execute(select(User).where(User.email == email))
-    user: User | None = result.scalars().first()
+    user = result.scalars().first()
+    safe_user_id = str(int(user.id))
+    await db.execute(text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)"))
 
     if user is None:
         raise credentials_exception
