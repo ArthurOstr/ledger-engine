@@ -18,7 +18,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://ledger-engine-ui.vercel.app",
+    "https://vercel.com/arthur-ostr-s-projects/ledger-ui/EdKgqsixS1PDLb1gsUknCnbyDiSL",
 ]
 
 app.add_middleware(
