@@ -13,8 +13,8 @@ router = APIRouter(prefix="/api/google_auth", tags=["Authentication"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = "http://localhost:8000/api/google_auth/google/callback"
-FRONTEND_SUCCESS_URI = "http://localhost:5173/"
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+FRONTEND_SUCCESS_URI = os.getenv("FRONTEND_SUCCESS_URI")
 
 
 @router.get("/google")
@@ -58,12 +58,13 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
 
         userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
         userinfo_response = await client.get(
-            userinfo_url,
-            headers={"Authorization": f"Bearer {google_access_token}"}
+            userinfo_url, headers={"Authorization": f"Bearer {google_access_token}"}
         )
 
         if userinfo_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to exchange token with Google")
+            raise HTTPException(
+                status_code=400, detail="Failed to exchange token with Google"
+            )
 
         userinfo_json = userinfo_response.json()
         google_email = userinfo_json.get("email")
@@ -82,13 +83,14 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
     response = RedirectResponse(url=FRONTEND_SUCCESS_URI)
 
     response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=1800,
-            path="/"
-        )
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=1800,
+        path="/",
+    )
 
     return response
+
