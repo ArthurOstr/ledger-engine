@@ -85,6 +85,6 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(
-        os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        os.getenv("REDIS_URL")
     )
     functions = [process_excel_file]
