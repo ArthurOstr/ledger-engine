@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.dependencies import get_current_user
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -21,8 +22,8 @@ async def logout_user(response: Response):
     """Destroys the HTTPOnly cookie"""
     response.delete_cookie(
         key="access_token",
-        samesite="lax",
-        secure=False,
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
         httponly=True,
         path="/"
     )
@@ -67,8 +68,8 @@ async def login_for_access_token(
       key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
         max_age=1800,
         path="/"
     )

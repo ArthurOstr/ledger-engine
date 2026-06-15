@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 from app.database import get_db
 from app.models.user import User
 from app.core.security import create_access_token
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/google_auth", tags=["Authentication"])
 
@@ -86,8 +87,8 @@ async def auth_google_callback(code: str, db: AsyncSession = Depends(get_db)):
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
         max_age=1800,
         path="/",
     )

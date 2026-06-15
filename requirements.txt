@@ -37,3 +37,4 @@ python-dotenv==1.2.2
 python-dateutil==2.9.0.post0
 et_xmlfile==2.0.0
 six==1.17.0
+pydantic_settings
