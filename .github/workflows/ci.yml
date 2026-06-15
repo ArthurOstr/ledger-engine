@@ -46,5 +46,6 @@ jobs:
 
           GOOGLE_CLIENT_ID: dummy_ci_client_id
           GOOGLE_CLIENT_SECRET: dummy_ci_client_secret
+          REDIS_URL: redis://localhost:6379/0
         run: |
           python -m pytest app/tests/
