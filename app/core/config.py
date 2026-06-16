@@ -26,7 +26,7 @@ class Settings(BaseSettings):
         """Dynamically build the arg for SQLAlchemy engine kwargs"""
         kwargs = {
             "pool_pre_ping": True,
-            "pool_recycle": 1800,
+            "pool_recycle": 300,
             "pool_size": 5,
             "max_overflow": 10,
         }
