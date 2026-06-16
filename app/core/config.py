@@ -24,9 +24,20 @@ class Settings(BaseSettings):
     @property
     def db_engine_kwargs(self) -> dict:
         """Dynamically build the arg for SQLAlchemy engine kwargs"""
-        kwargs = {"pool_pre_ping": True}
+        kwargs = {
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+            "pool_size": 5,
+            "max_overflow": 10,
+        }
         if self.is_production:
-            kwargs["connect_args"] = {"ssl": "require"}
+            kwargs["connect_args"] = {
+                "ssl": "require",
+                "server_settings": {
+                    "statement_cache_size": "0"
+                },
+                "prepared_statement_cache_size": "0"
+            }
         return kwargs
 
 
