@@ -61,9 +61,11 @@ async def test_worker_process_excel_file():
     test_context = {"db_session": db}
 
     # 2. Execute the background worker directly
-    result_message = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
+    result = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
 
-    assert "Processed 1 transactions." in result_message
+    assert result["status"] == "SUCCESS"
+    assert result["inserted_count"] == 1
+    assert result["error"] is None
 
     # 3. Mathematically prove the worker successfully injected the rules into the parser
     async with TestingSessionLocal() as db:
