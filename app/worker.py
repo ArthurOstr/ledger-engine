@@ -41,8 +41,10 @@ def with_db_session(func):
 
 @with_db_session
 async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, user_id: int):
+
+    job_id = ctx.get("job_id")
     logger.info(
-        f"Picked up job for User ID: {user_id}. File size: {len(file_bytes)} bytes."
+        f"Picked up job [{job_id}] for User ID: {user_id}. File size: {len(file_bytes)} bytes."
     )
 
     try:
@@ -75,12 +77,24 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
             db=db_session, transactions=transactions, user_id=user_id
         )
 
+        await db_session.commit()
         logger.info(f"Successfully extracted {inserted_count} rows.")
-        return f"Processed {inserted_count} transactions."
+        return {
+            "status": "SUCCESS",
+            "inserted_count": inserted_count,
+            "error": None
+        }
 
     except Exception as e:
         logger.exception(f"Fatal error processing file: {str(e)}")
-        raise e
+
+        await db_session.rollback()
+
+        return {
+            "status": "FAILED",
+            "inserted_count": 0,
+            "error": str(e)
+        }
 
 
 class WorkerSettings:

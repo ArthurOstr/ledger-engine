@@ -77,7 +77,25 @@ async def get_upload_status(job_id: str, redis_pool=Depends(get_redis_pool)):
 
     status = await job.status()
     if status == JobStatus.not_found:
-        return {"job_id": job_id, "status": "failed_or_expired"}
+        return {"job_id": job_id, "status": "FAILED", "error": "Job expired or not found in Redis"}
 
-    # JobStatus is an enum: queued, in_progress, deferred, complete, not_found
-    return {"job_id": job_id, "status": status.value}
+    if status != JobStatus.complete:
+        return {"job_id": job_id, "status": status.value.upper()}
+
+    try:
+        result_dict = await job.result(timeout=0)
+
+        # Merge the worker's dictionary into the HTTP response
+        return {
+            "job_id": job_id,
+            "status": result_dict.get("status", "FAILED"),
+            "inserted_count": result_dict.get("inserted_count", 0),
+            "error": result_dict.get("error", "Unknown processing error")
+        }
+
+    except Exception as e:
+        return {
+            "job_id": job_id,
+            "status": "FAILED",
+            "error": f"Infrastructure failure: {str(e)}"
+        }
