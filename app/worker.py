@@ -102,3 +102,5 @@ class WorkerSettings:
         os.getenv("REDIS_URL")
     )
     functions = [process_excel_file]
+
+    poll_delay = 10.0
