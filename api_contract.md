@@ -111,10 +111,10 @@ Fetches the standardized financial data to populate the frontend dashboard. Stri
 - **Security:** Protected — requires `Authorization: Bearer <token>` header
 - **Query Parameters (optional):**
 
-| Parameter | Type  | Default | Description              |
-|-----------|-------|---------|--------------------------|
+| Parameter | Type  | Default | Description                 |
+|-----------|-------|---------|-----------------------------|
 | `limit`   | `int` | `50`    | Number of records to return |
-| `offset`  | `int` | `0`     | Pagination offset         |
+| `offset`  | `int` | `0`     | Pagination offset           |
 
 - **Success Response `200 OK`:**
 
@@ -138,3 +138,83 @@ Fetches the standardized financial data to populate the frontend dashboard. Stri
 ```
 
 - **Error Response `401 Unauthorized`:** Token missing or expired.
+
+---
+
+## 5. Categorization Rules Engine (Automation Layer)
+
+### Create and Apply Rule
+
+Creates a dynamic categorization blueprint and instantly triggers a push-down retroactive sweep across the PostgreSQL C-kernel to assign the category to all existing uncategorized transactions matching the substring.
+
+- **Endpoint:** `POST /api/rules`
+- **Security:** Protected — requires `Authorization: Bearer <token>` header
+- **Content-Type:** `application/json`
+- **Request Body (`CategoryRuleCreate`):**
+
+```json
+{
+  "keyword": "атб",
+  "assigned_category": "Groceries",
+  "is_active": true
+}
+```
+
+- **Success Response `201 Created` (`CategoryRuleResponse`):**
+
+```json
+{
+  "keyword": "атб",
+  "assigned_category": "Groceries",
+  "is_active": true,
+  "id": 1,
+  "owner_id": 42
+}
+```
+
+- **Error Response `400 Bad Request`:** Returned if the keyword is blank or empty.
+- **Error Response `401 Unauthorized`:** Token missing or expired.
+- **Error Response `409 Conflict`:** Returned if an active rule for this exact keyword already exists for the tenant.
+
+---
+
+### Get Active Rules
+
+Retrieves all active categorization rules belonging strictly to the authenticated tenant. Rules marked as `is_active=false` are stripped at the database level.
+
+- **Endpoint:** `GET /api/rules`
+- **Security:** Protected — requires `Authorization: Bearer <token>` header
+- **Success Response `200 OK` (`list[CategoryRuleResponse]`):**
+
+```json
+[
+  {
+    "keyword": "атб",
+    "assigned_category": "Groceries",
+    "is_active": true,
+    "id": 1,
+    "owner_id": 42
+  },
+  {
+    "keyword": "аврора",
+    "assigned_category": "Custom Home Repair",
+    "is_active": true,
+    "id": 2,
+    "owner_id": 42
+  }
+]
+```
+
+- **Error Response `401 Unauthorized`:** Token missing or expired.
+
+---
+
+### Delete Rule
+
+Executes an atomic Core statement to permanently destroy a categorization blueprint. Strictly verifies tenant ownership before deletion to prevent cross-tenant breaches.
+
+- **Endpoint:** `DELETE /api/rules/{rule_id}`
+- **Security:** Protected — requires `Authorization: Bearer <token>` header
+- **Success Response `204 No Content`:** No body returned upon successful deallocation.
+- **Error Response `401 Unauthorized`:** Token missing or expired.
+- **Error Response `404 Not Found`:** Returned if the rule ID does not exist or belongs to a different user.
