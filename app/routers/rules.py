@@ -55,7 +55,6 @@ async def create_rule(
     sweep_stmt = (
         update(Transaction)
         .where(Transaction.owner_id == current_user.id)
-        .where(Transaction.category.is_(None))
         .where(Transaction.description.ilike(search_pattern))
         .values(category=new_rule.assigned_category)
     )
