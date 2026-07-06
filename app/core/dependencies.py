@@ -36,10 +36,12 @@ async def get_current_user(
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalars().first()
-    safe_user_id = str(int(user.id))
-    await db.execute(text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)"))
 
     if user is None:
         raise credentials_exception
+
+    safe_user_id = str(int(user.id))
+    await db.execute(text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)"))
+
 
     return user
