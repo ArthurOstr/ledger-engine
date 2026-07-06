@@ -1,9 +1,7 @@
 import os
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from arq import create_pool
 from arq.jobs import Job, JobStatus
-from arq.connections import RedisSettings
 
 from app.database import get_db
 from app.services.ledger_queries import fetch_transaction
@@ -13,13 +11,8 @@ from app.models.user import User
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
-
-async def get_redis_pool():
-    redis_settings = RedisSettings.from_dsn(
-        os.getenv("REDIS_URL", "redis://redis:6379/0")
-    )
-    return await create_pool(redis_settings)
-
+async def get_redis_pool(request: Request):
+    return request.app.state.redis_pool
 
 @router.post("/upload", status_code=202)
 async def upload_ledger(
