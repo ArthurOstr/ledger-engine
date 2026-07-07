@@ -50,15 +50,15 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
     try:
         # KERNEL KEY INJECTION
         # Set the PostgreSQL session variable so RLS allows worker to see the user's data
-        safe_user_id = str(int(user_id))
         await db_session.execute(
-            text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)")
+            text(f"SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": str(int(user_id))},
         )
 
         # Download the specific user's rules from PostgreSQL
         stmt = select(CategoryRule).where(
             CategoryRule.owner_id == user_id,
-            CategoryRule.is_active,
+            CategoryRule.is_active == True,
         )
 
         result = await db_session.execute(stmt)

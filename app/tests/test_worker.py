@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.future import select
 
-from app.tests.conftest import TestingSessionLocal
+from tests.conftest import TestingSessionLocal
 from app.worker import process_excel_file
 from app.models.user import User
 from app.models.transaction import Transaction
@@ -43,7 +43,6 @@ async def test_worker_process_excel_file():
         user = User(email="worker_test@example.com", hashed_password="hashed")
         db.add(user)
         await db.commit()
-
         await db.execute(text(f"SELECT set_config('app.current_user_id', '{user.id}', true)"))
 
         # We tell the engine that "аврора" should override the bank's MCC
@@ -56,12 +55,11 @@ async def test_worker_process_excel_file():
         db.add(rule)
         await db.commit()
 
-    file_bytes = create_mock_excel()
+        file_bytes = create_mock_excel()
+        test_context = {"db_session": db}
 
-    test_context = {"db_session": db}
-
-    # 2. Execute the background worker directly
-    result = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
+        # 2. Execute the background worker directly
+        result = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
 
     assert result["status"] == "SUCCESS"
     assert result["inserted_count"] == 1

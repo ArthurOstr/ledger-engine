@@ -40,8 +40,7 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
-    safe_user_id = str(int(user.id))
-    await db.execute(text(f"SELECT set_config('app.current_user_id', '{safe_user_id}', true)"))
+    await db.execute(text(f"SELECT set_config('app.current_user_id', :uid, true)"), {"uid": str(int(user.id))})
 
 
     return user

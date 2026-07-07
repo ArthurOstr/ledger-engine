@@ -41,7 +41,7 @@ class Transaction(Base):
     hash_id: Mapped[str] = mapped_column(String, unique=True, index=True)
 
     # Monobank extensions
-    mcc: Mapped[Optional[str]] = mapped_column(Integer, nullable=True)
+    mcc: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     commissions: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     cashback: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)

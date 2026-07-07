@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 
 from app.main import app
-from app.tests.conftest import TestingSessionLocal
+from tests.conftest import TestingSessionLocal
 from app.routers.transaction import get_redis_pool
 from app.models.transaction import Transaction, BankSource
 from app.models.user import User

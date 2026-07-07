@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 
 from app.main import app
 from app.models.user import User
-from app.tests.conftest import TestingSessionLocal
+from tests.conftest import TestingSessionLocal
 
 pytestmark = pytest.mark.asyncio
 
