@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     @property
     def redis_settings(self) -> RedisSettings:
         """Single source of truth for ARQ Redis connection parameters across App and Worker"""
-        return RedisSettings(self.REDIS_URL)
+        return RedisSettings.from_dsn(self.REDIS_URL)
     
     @property
     def db_engine_kwargs(self) -> dict:
