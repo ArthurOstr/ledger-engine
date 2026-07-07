@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         return "lax"
 
     @property
-    def redis_url(self) -> RedisSettings:
+    def redis_settings(self) -> RedisSettings:
         """Single source of truth for ARQ Redis connection parameters across App and Worker"""
         return RedisSettings(self.REDIS_URL)
     
