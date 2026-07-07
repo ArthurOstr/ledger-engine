@@ -1,11 +1,13 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from arq.connections import RedisSettings
 
 
 class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DATABASE_URL: str
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -21,6 +23,11 @@ class Settings(BaseSettings):
     def cookie_samesite(self):
         return "lax"
 
+    @property
+    def redis_settings(self) -> RedisSettings:
+        """Single source of truth for ARQ Redis connection parameters across App and Worker"""
+        return RedisSettings.from_dsn(self.REDIS_URL)
+    
     @property
     def db_engine_kwargs(self) -> dict:
         """Dynamically build the arg for SQLAlchemy engine kwargs"""

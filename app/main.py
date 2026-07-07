@@ -1,16 +1,20 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from arq import create_pool
 
 from app.database import engine, Base
 from app.routers import transaction, user, google_auth, rules
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.core.config import settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.redis_pool = await create_pool(settings.redis_settings)
     yield
+    await app.state.redis_pool.close()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -84,15 +84,15 @@ Accepts a raw Excel export from the bank, dynamically hashes transactions for te
 - **Security:** Protected — requires `Authorization: Bearer <token>` header
 - **Content-Type:** `multipart/form-data`
 - **Payload:** `file` — binary `.xlsx` file
-- **Success Response `200 OK`:**
+- **Success Response `202 OK`:**
 
 ```json
 {
   "filename": "ledger_export.xlsx",
-  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "user_email": "user@example.com",
-  "message": "File successfully passed the airlock.",
-  "records_processed": 142
+  "message": "File successfully passed to the broker.",
+  "job_id": "893c83759df14d0382875ab947eb387f",
+  "status": "queued"
 }
 ```
 

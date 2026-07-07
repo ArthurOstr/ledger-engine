@@ -3,7 +3,6 @@ import logging
 from sqlalchemy import text
 from functools import wraps
 from sqlalchemy.ext.asyncio import AsyncSession
-from arq.connections import RedisSettings
 from sqlalchemy.future import select
 
 from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
@@ -11,6 +10,7 @@ from app.database import AsyncSessionLocal
 from app.models.category_rule import CategoryRule
 from app.models.user import User
 from app.models.transaction import Transaction
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,9 +98,6 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
 
 
 class WorkerSettings:
-    redis_settings = RedisSettings.from_dsn(
-        os.getenv("REDIS_URL")
-    )
+    redis_settings = settings.redis_settings
     functions = [process_excel_file]
-
     poll_delay = 10.0
