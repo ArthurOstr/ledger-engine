@@ -1,6 +1,6 @@
 import os
 from typing import List
-from urlib.parse import urlparse
+from urllib.parse import urlparse
 from sqlalchemy.ext.asyncio import create_async_engine
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from arq.connections import RedisSettings
