@@ -1,4 +1,5 @@
 import os
+from typing import List
 from sqlalchemy.ext.asyncio import create_async_engine
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from arq.connections import RedisSettings
@@ -8,6 +9,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
