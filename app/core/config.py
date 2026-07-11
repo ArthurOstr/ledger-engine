@@ -1,8 +1,11 @@
 import os
 from typing import List
+from urlib.parse import urlparse
 from sqlalchemy.ext.asyncio import create_async_engine
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from arq.connections import RedisSettings
+
+import database
 
 
 class Settings(BaseSettings):
@@ -31,8 +34,23 @@ class Settings(BaseSettings):
 
     @property
     def redis_settings(self) -> RedisSettings:
-        """Single source of truth for ARQ Redis connection parameters across App and Worker"""
-        return RedisSettings.from_dsn(self.REDIS_URL)
+        """
+        Robust source of truth for ARQ Redis connection parameters.
+        Handles standard Docker URLs, raw strings, and secure cloud clusters.
+        """
+        try:
+            url = urlparse(self.REDIS_URL)
+            use_ssl = url.scheme == "rediss" or self.is_production
+
+            return RedisSettings(
+                host=url.hostname or "localhost",
+                port=url.port or 6379,
+                password=url.password,
+                database=int(url.path.lstrip("/")) if url.path else 0,
+                ssl=use_ssl,
+            )
+        except (ValueError, AttributeError):
+            return RedisSettings.from_dsn(self.REDIS_URL)
     
     @property
     def db_engine_kwargs(self) -> dict:
