@@ -196,7 +196,7 @@ def _sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
             )
             # Erasing anomalies such as dashes, NaN, and empty values
             df[col] = df[col].apply(
-                lambda x: None if x in ("—", "–", "nan", "None", "") else Decimal(x)
+                lambda x: None if x in ("—", "–", "nan", "None", "", "-") else Decimal(x)
             )
     return df
 

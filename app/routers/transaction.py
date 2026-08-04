@@ -48,7 +48,7 @@ async def upload_ledger(
 
 @router.get("", response_model=list[TransactionResponse])
 async def get_transaction(
-    limit: int = 50,
+    limit: int = 5000,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

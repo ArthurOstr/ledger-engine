@@ -6,7 +6,7 @@ from app.models.transaction import Transaction
 
 
 async def fetch_transaction(
-    db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0
+    db: AsyncSession, user_id: int, limit: int = 5000, offset: int = 0
 ) -> Sequence[Transaction]:
     """
     Asynchronously queries the database for transactions,
