@@ -95,10 +95,7 @@ def _extract_raw_dataframe(contents: bytes) -> pd.DataFrame:
         row_strings = " ".join(row.dropna().astype(str).tolist())
 
         # Check if Monobank or Privatbank anchors remain
-        if (
-                "Дата i час операції" in row_strings
-                or "Сума в валюті картки" in row_strings
-        ):
+        if "MCC" in row_strings or "Картка" in row_strings:
             header_row_index = idx
             break
 
@@ -130,7 +127,7 @@ def _apply_bank_schema(df: pd.DataFrame) -> tuple[pd.DataFrame, BankSource]:
         for col in df.columns:
             col_str = str(col)
             # Capture 3 letters that matter to find the currency we need
-            amount_match = re.search(r"Сума в валюті картки \(([A-Z]{3})\)", col_str)
+            amount_match = re.search(r"Сума\s+[ву]\s+валюті\s+картки\s*\(([A-Z]{3})\)", col_str)
 
             if amount_match:
                 extracted_currency = amount_match.group(1)
@@ -149,6 +146,13 @@ def _apply_bank_schema(df: pd.DataFrame) -> tuple[pd.DataFrame, BankSource]:
 
     else:
         df = df.rename(columns=PRIVAT_MAPPING)
+        if "currency" not in df.columns:
+            df["currency"] = "UAH"
+
+    if "balance_currency" not in df.columns:
+        df["balance_currency"] = df.get("currency", "UAH")
+    if "transaction_currency" not in df.columns:
+        df["transaction_currency"] = df.get("currency", "UAH")
 
     # Define the strict architecture of what is allowed to pass
     FINAL_COLUMNS = [
@@ -174,16 +178,29 @@ def _apply_bank_schema(df: pd.DataFrame) -> tuple[pd.DataFrame, BankSource]:
 # Sanitization
 def _sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
     """Cleans dates and decimals"""
+    # Type normalization: CURRENCIES
+    CURRENCY_COLUMNS = ["currency", "balance_currency", "transaction_currency"]
+    for col in CURRENCY_COLUMNS:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.upper()
+            df.loc[df[col].isin(["NAN", "NONE", ""]), col] = "UAH"
+
     # Type normalization: DATES
     for col in DATE_COLUMNS:
         if col in df.columns:
             # 1. Force to string and scrub invisible spaces
             df[col] = df[col].astype(str).str.strip()
 
-            # 2. Parse safely. 'coerce' turns unreadable garbage into NaT instead of crashing.
+            # 2. Parse safely. 'coerce' turns unreadable garbage into NaT instead of crashing
             df[col] = pd.to_datetime(
                 df[col], dayfirst=True, errors="coerce"
             )
+
+    # prevents NULL/NaT insertion
+    valid_date_cols = [c for c in DATE_COLUMNS if c in df.columns]
+    if valid_date_cols:
+        df = df.dropna(subset=valid_date_cols)
+
     # Type normalization: DECIMALS
     for col in DECIMAL_COLUMNS:
         if col in df.columns:
@@ -198,6 +215,21 @@ def _sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].apply(
                 lambda x: None if x in ("—", "–", "nan", "None", "", "-") else Decimal(x)
             )
+
+    # Type normalization: MCC
+        # Type normalization: MCC
+        if "mcc" in df.columns:
+            def _clean_mcc(val):
+                if pd.isna(val) or val in ("—", "–", "nan", "None", "", "-"):
+                    return None
+                try:
+
+                    return f"{int(float(val)):04d}"
+                except (ValueError, TypeError):
+                    return None
+
+            df["mcc"] = [_clean_mcc(x) for x in df["mcc"]]
+            df["mcc"] = df["mcc"].astype(object).where(df["mcc"].notna(), None)
     return df
 
 # Categorization data(Cascade way to do that)

@@ -137,3 +137,32 @@ def test_hash_id_determinism():
     # The cryptographic hashes must be mathematically identical
     assert transactions_run_1[0].hash_id == transactions_run_2[0].hash_id
     assert transactions_run_1[1].hash_id == transactions_run_2[1].hash_id
+
+def test_sanitize_data_drops_invalid_dates():
+    from app.services.ledger_parser import _sanitize_data
+    import pandas as pd
+
+    raw_data = {
+        "date": ["2024-01-15", "not-a-date", None, "2024-01-16"],
+        "amount": [100.0, 50.0, 20.0, 75.0],
+        "description": ["Valid 1", "Invalid Date", "Missing Date", "Valid 2"]
+    }
+    df = pd.DataFrame(raw_data)
+    cleaned = _sanitize_data(df)
+
+    assert len(cleaned) == 2
+    assert list(cleaned["description"]) == ["Valid 1", "Valid 2"]
+
+def test_sanitize_data_normalizes_mcc():
+    from app.services.ledger_parser import _sanitize_data
+    import pandas as pd
+
+    raw_data = {
+        "date": ["2024-01-15", "2024-01-16", "2024-01-17", "2024-01-18", "2024-01-19"],
+        "amount": [10.0, 20.0, 30.0, 40.0, 50.0],
+        "mcc": [5411, 5812.0, "742", "invalid", None],
+    }
+    df = pd.DataFrame(raw_data)
+    cleaned = _sanitize_data(df)
+
+    assert list(cleaned["mcc"]) == ["5411", "5812", "0742", None, None]
