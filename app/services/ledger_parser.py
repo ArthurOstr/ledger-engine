@@ -326,8 +326,11 @@ def parse_excel_payload(contents: bytes, user_id: int, user_rules: dict) -> list
 
 
 async def save_transactions_to_db(
-    db: AsyncSession, transactions: list[TransactionCreate], user_id: int
-):
+    db: AsyncSession,
+        transactions: list[TransactionCreate],
+        user_id: int,
+        chunk_size: int = 1000
+) -> int:
     # Pydantic models to dictionaries
     values_to_insert = []
     for record in transactions:
@@ -338,12 +341,20 @@ async def save_transactions_to_db(
     if not values_to_insert:
         return 0
 
-    # Special postgresql Insert statement
-    stmt = insert(Transaction).values(values_to_insert)
+    total_inserted = 0
+    # Iterate in bounded chunks(for my project 16 col * 1000 rows = 16000 < 32,767 postgres threshold)
+    for i in range (0, len(values_to_insert), chunk_size):
+        chunk = values_to_insert[i : i + chunk_size]
+        # Special postgresql Insert statement
+        stmt = (
+            insert(Transaction)
+            .values(chunk)
+            .on_conflict_do_nothing(index_elements=["hash_id"])
+        )
 
-    # Ignore duplicated hash_id
-    stmt = stmt.on_conflict_do_nothing(index_elements=["hash_id"])
-    result = await db.execute(stmt)
+        result = await db.execute(stmt)
+        total_inserted += result.rowcount
+
     await db.commit()
 
-    return result.rowcount
+    return total_inserted
