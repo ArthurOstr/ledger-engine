@@ -6,6 +6,7 @@ from decimal import Decimal
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
+from itertools import batched
 
 from app.models.transaction import BankSource, Transaction
 from app.schemas.transaction import TransactionBase, TransactionCreate
@@ -342,13 +343,12 @@ async def save_transactions_to_db(
         return 0
 
     total_inserted = 0
-    # Iterate in bounded chunks(for my project 16 col * 1000 rows = 16000 < 32,767 postgres threshold)
-    for i in range (0, len(values_to_insert), chunk_size):
-        chunk = values_to_insert[i : i + chunk_size]
+
+    for chunk in batched(values_to_insert, chunk_size):
         # Special postgresql Insert statement
         stmt = (
             insert(Transaction)
-            .values(chunk)
+            .values(list(chunk))
             .on_conflict_do_nothing(index_elements=["hash_id"])
         )
 
