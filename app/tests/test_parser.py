@@ -3,9 +3,13 @@ import pytest
 import pandas as pd
 from decimal import Decimal
 from fastapi import HTTPException
+from datetime import datetime
+from sqlalchemy import text
 
-from app.services.ledger_parser import detect_bank_source, parse_excel_payload
+from app.services.ledger_parser import detect_bank_source, parse_excel_payload, save_transactions_to_db
+from app.models.user import User
 from app.models.transaction import BankSource
+from app.schemas.transaction import TransactionCreate
 
 
 # --- MOCK DATA FACTORY ---
@@ -166,3 +170,45 @@ def test_sanitize_data_normalizes_mcc():
     cleaned = _sanitize_data(df)
 
     assert list(cleaned["mcc"]) == ["5411", "5812", "0742", None, None]
+
+@pytest.mark.asyncio
+async def test_save_to_db_chunking_and_deduplication(db_session):
+    user = User(email="test_bulk@example",hashed_password="test_password")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    await db_session.execute(
+        text(f"SET app.current_user_id= '{user.id}';")
+    )
+    total_records = 2500
+    mock_transactions = [
+        TransactionCreate(
+            date=datetime.now(),
+            amount=Decimal("15.50"),
+            currency="UAH",
+            balance_after=Decimal("150.00"),
+            transaction_amount=Decimal("15.50"),
+            transaction_currency="UAH",
+            balance_currency="UAH",
+            hash_id=f"test_bulk_hash_{i}",
+            bank=BankSource.MONOBANK,
+            description=f"Transaction #{i}",
+        )
+        for i in range(total_records)
+    ]
+
+    inserted_count = await save_transactions_to_db(
+        db=db_session,
+        transactions=mock_transactions,
+        user_id=user.id,
+        chunk_size=1000,
+    )
+    assert inserted_count == total_records
+
+    duplicate_count = await save_transactions_to_db(
+        db=db_session,
+        transactions=mock_transactions,
+        user_id=user.id,
+        chunk_size=1000,
+    )
+    assert duplicate_count == 0

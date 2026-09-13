@@ -51,7 +51,7 @@ async def prepare_database():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.fixture(autouse=True)
-def override_fastapi_dependecies():
+def override_fastapi_dependencies():
     """Injects the testing session into the FastAPI application router"""
     async def _override_db():
         async with TestingSessionLocal() as session:
@@ -60,3 +60,9 @@ def override_fastapi_dependecies():
     app.dependency_overrides[get_db] = _override_db 
     yield 
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture
+async def db_session():
+    async with TestingSessionLocal() as session:
+        yield session
+
