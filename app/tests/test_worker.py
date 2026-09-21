@@ -65,7 +65,7 @@ async def test_worker_process_excel_file():
     assert result["inserted_count"] == 1
     assert result["error"] is None
 
-    # 3. Mathematically prove the worker successfully injected the rules into the parser
+    # 3. Mathematically prove the worker successfully injected the rules into the parsers
     async with TestingSessionLocal() as db:
         result = await db.execute(select(Transaction).where(Transaction.owner_id == user.id))
         tx = result.scalars().first()

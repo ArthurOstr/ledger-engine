@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from datetime import datetime
 from sqlalchemy import text
 
-from app.services.ledger_parser import detect_bank_source, parse_excel_payload, save_transactions_to_db
+from services.ledger_parser import detect_bank_source, parse_excel_payload, save_transactions_to_db
 from app.models.user import User
 from app.models.transaction import BankSource
 from app.schemas.transaction import TransactionCreate
@@ -143,7 +143,7 @@ def test_hash_id_determinism():
     assert transactions_run_1[1].hash_id == transactions_run_2[1].hash_id
 
 def test_sanitize_data_drops_invalid_dates():
-    from app.services.ledger_parser import _sanitize_data
+    from app.services.parsers.base import sanitize_data
     import pandas as pd
 
     raw_data = {
@@ -152,13 +152,13 @@ def test_sanitize_data_drops_invalid_dates():
         "description": ["Valid 1", "Invalid Date", "Missing Date", "Valid 2"]
     }
     df = pd.DataFrame(raw_data)
-    cleaned = _sanitize_data(df)
+    cleaned = sanitize_data(df)
 
     assert len(cleaned) == 2
     assert list(cleaned["description"]) == ["Valid 1", "Valid 2"]
 
 def test_sanitize_data_normalizes_mcc():
-    from app.services.ledger_parser import _sanitize_data
+    from app.services.parsers.base import sanitize_data
     import pandas as pd
 
     raw_data = {
@@ -167,7 +167,7 @@ def test_sanitize_data_normalizes_mcc():
         "mcc": [5411, 5812.0, "742", "invalid", None],
     }
     df = pd.DataFrame(raw_data)
-    cleaned = _sanitize_data(df)
+    cleaned = sanitize_data(df)
 
     assert list(cleaned["mcc"]) == ["5411", "5812", "0742", None, None]
 

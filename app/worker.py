@@ -1,15 +1,15 @@
-import os
 import logging
-from sqlalchemy import text
 from functools import wraps
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from typing import Any
 
-from app.services.ledger_parser import parse_excel_payload, save_transactions_to_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
+from fastapi import HTTPException
+
+from app.services.parsers.registry import parse_excel_payload
+from app.services.ledger_parser import save_transactions_to_db
 from app.database import AsyncSessionLocal
 from app.models.category_rule import CategoryRule
-from app.models.user import User
-from app.models.transaction import Transaction
 from app.core.config import settings
 
 logging.basicConfig(
@@ -40,25 +40,30 @@ def with_db_session(func):
     return wrapper
 
 @with_db_session
-async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, user_id: int):
+async def process_excel_file(
+        ctx: dict[str, Any],
+        db_session: AsyncSession,
+        file_bytes: bytes,
+        user_id: int
+) -> dict[str, Any]:
 
-    job_id = ctx.get("job_id")
+    job_id = ctx.get("job_id", "unknown")
     logger.info(
         f"Picked up job [{job_id}] for User ID: {user_id}. File size: {len(file_bytes)} bytes."
     )
 
     try:
-        # KERNEL KEY INJECTION
+        # KERNEL KEY INJECTION.
         # Set the PostgreSQL session variable so RLS allows worker to see the user's data
         await db_session.execute(
             text(f"SELECT set_config('app.current_user_id', :uid, true)"),
             {"uid": str(int(user_id))},
         )
 
-        # Download the specific user's rules from PostgreSQL
+        # Download the specific user's regex rules from PostgreSQL
         stmt = select(CategoryRule).where(
             CategoryRule.owner_id == user_id,
-            CategoryRule.is_active == True,
+            CategoryRule.is_active.is_(True),
         )
 
         result = await db_session.execute(stmt)
@@ -67,7 +72,7 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
         # Convert db object into Python dict
         user_rules = {rule.keyword: rule.assigned_category for rule in rules_object}
 
-        # Raw files and the custom rules are going to Pandas parser
+        # Raw files and the custom rules are going to Pandas parsers
         transactions = parse_excel_payload(
             contents=file_bytes, user_id=user_id, user_rules=user_rules
         )
@@ -77,25 +82,30 @@ async def process_excel_file(ctx, db_session: AsyncSession, file_bytes: bytes, u
             db=db_session, transactions=transactions, user_id=user_id
         )
 
-        await db_session.commit()
-        logger.info(f"Successfully extracted {inserted_count} rows.")
+        logger.info(f"Job [{job_id}] successfully extracted {inserted_count} rows.")
         return {
             "status": "SUCCESS",
             "inserted_count": inserted_count,
             "error": None
         }
 
-    except Exception as e:
-        logger.exception(f"Fatal error processing file: {str(e)}")
-
+    except HTTPException as http_exc:
+        logger.warning(f"Validation error in job [{job_id}] with error: {str(http_exc)}")
         await db_session.rollback()
 
         return {
             "status": "FAILED",
             "inserted_count": 0,
-            "error": str(e)
+            "error": http_exc.detail
         }
-
+    except Exception as e:
+        logger.exception(f"Unexpected fatal error processing job [{job_id}]: {str(e)}")
+        await db_session.rollback()
+        return {
+            "status": "FAILED",
+            "inserted_count": 0,
+            "error": "Internal server error occurred while processing statement.",
+        }
 
 class WorkerSettings:
     redis_settings = settings.redis_settings
