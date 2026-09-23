@@ -1,4 +1,4 @@
-from app.services.parsers.base import BaseBankParser, generate_row_hash, _sanitize_data
+from app.services.parsers.base import BaseBankParser, generate_row_hash, sanitize_data
 from app.services.parsers.monobank import MonobankParser
 from app.services.parsers.privatbank import PrivatBankParser
 from app.services.parsers.registry import (
@@ -15,5 +15,5 @@ __all__ = [
     "get_parser_for_dataframe",
     "parse_excel_payload",
     "generate_row_hash",
-    "_sanitize_data",
+    "sanitize_data",
 ]
