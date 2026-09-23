@@ -7,7 +7,11 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     curl  \
     && rm -rf /var/lib/apt/lists/*
-RUN addgroup --system appgroup && adduser --system --group appuser
+
+RUN addgroup --gid 1000 appgroup && \
+    adduser --uid 1000 --gid 1000 --disabled-password --gecos "" appuser
+RUN mkdir -p /tmp/statement_uploads &&  \
+    chown -R appuser:appgroup /tmp/statement_uploads
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=appuser:appgroup . .

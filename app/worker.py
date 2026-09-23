@@ -1,7 +1,7 @@
 import logging
 from functools import wraps
 from typing import Any
-
+from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from fastapi import HTTPException
@@ -43,16 +43,25 @@ def with_db_session(func):
 async def process_excel_file(
         ctx: dict[str, Any],
         db_session: AsyncSession,
-        file_bytes: bytes,
+        file_path: str,
         user_id: int
 ) -> dict[str, Any]:
 
     job_id = ctx.get("job_id", "unknown")
+    path_obj = Path(file_path)
+
     logger.info(
-        f"Picked up job [{job_id}] for User ID: {user_id}. File size: {len(file_bytes)} bytes."
+        f"Picked up job [{job_id}] for User ID: {user_id}. File path: {file_path}."
     )
 
     try:
+        if not path_obj.exists:
+            raise HTTPException(
+                status_code=400,
+                detail="File path does not exist."
+            )
+        file_bytes = path_obj.read_bytes()
+
         # KERNEL KEY INJECTION.
         # Set the PostgreSQL session variable so RLS allows worker to see the user's data
         await db_session.execute(
@@ -76,13 +85,16 @@ async def process_excel_file(
         transactions = parse_excel_payload(
             contents=file_bytes, user_id=user_id, user_rules=user_rules
         )
+        parsed_count = len(transactions)
 
         # Saving to the database
         inserted_count = await save_transactions_to_db(
             db=db_session, transactions=transactions, user_id=user_id
         )
+        duplicate_count = parsed_count - inserted_count
 
-        logger.info(f"Job [{job_id}] successfully extracted {inserted_count} rows.")
+        logger.info(f"Job [{job_id}] parsed {parsed_count} rows:"
+                    f" successfully extracted {inserted_count} rows, {duplicate_count} duplicate rows.")
         return {
             "status": "SUCCESS",
             "inserted_count": inserted_count,

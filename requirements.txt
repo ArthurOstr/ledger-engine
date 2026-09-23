@@ -38,3 +38,4 @@ python-dateutil==2.9.0.post0
 et_xmlfile==2.0.0
 six==1.17.0
 pydantic_settings
+aiofiles>=24.1.0

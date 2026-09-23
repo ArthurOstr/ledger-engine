@@ -1,5 +1,8 @@
-import os
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
+import uuid
+from pathlib import Path
+import logging
+import aiofiles
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from arq.jobs import Job, JobStatus
 
@@ -9,12 +12,17 @@ from app.schemas.transaction import TransactionResponse
 from app.core.dependencies import get_current_user
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
+
+UPLOAD_DIR = Path("tmp/statement_uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 async def get_redis_pool(request: Request):
     return request.app.state.redis_pool
 
-@router.post("/upload", status_code=202)
+@router.post("/upload", status_code=status.HTTP_202_ACCEPTED)
 async def upload_ledger(
     file: UploadFile = File(...),
     redis_pool=Depends(get_redis_pool),
@@ -22,28 +30,63 @@ async def upload_ledger(
 ):
     # Shield from non-Excel files
     if not file.filename.endswith((".xls", ".xlsx")):
+        logger.warning(
+            f"Upload rejected from User [{current_user.id}] due to file extension [{file.filename}]."
+        )
         raise HTTPException(
             status_code=400, detail="Invalid file type. Only .xls or .xlsx allowed"
         )
 
+    target_path = None
+    bytes_written = 0
+
     try:
-        contents = await file.read()
+        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+        target_path = UPLOAD_DIR / unique_filename
+
+        async with aiofiles.open(target_path, "wb") as buffer:
+            while chunk := await file.read(1024*1024):
+                await buffer.write(chunk)
+                bytes_written += len(chunk)
+
+        if bytes_written == 0:
+           logger.warning(
+               f"Upload rejected for User [{current_user.id}]: '{file.filename}' is empty"
+            )
+           target_path.unlink(missing_ok=True)
+           raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
         # Drop payload into the Redis Broker. It must match redis config(currently worker.py)
         job = await redis_pool.enqueue_job(
-            "process_excel_file", contents, current_user.id
+            "process_excel_file",
+            file_path=str(target_path),
+            user_id=current_user.id
+        )
+
+        logger.info(
+            f"Enqueued job [{job.job_id}] for User [{current_user.id}]:"
+            f"file='{file.filename}' ({bytes_written} bytes) -> path='{target_path}'"
         )
 
         return {
             "filename": file.filename,
             "user_email": current_user.email,
-            "message": "File successfully passed to the broker.",
+            "message": "File successfully queued for background processing.",
             "job_id": job.job_id,
             "status": "queued",
         }
 
+    except HTTPException:
+        raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Broker rejection: {str(e)}")
+        logger.exception(
+            f"Failed to stage upload for User [{current_user.id}], file='{file.filename}': {str(e)}"
+        )
+        if target_path and target_path.exists():
+            target_path.unlink(missing_ok=True)
+
+        raise HTTPException(status_code=500, detail=f"Broker rejection or storage failure: {str(e)}")
 
 
 @router.get("", response_model=list[TransactionResponse])

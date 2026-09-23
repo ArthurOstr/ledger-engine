@@ -45,6 +45,7 @@ services:
     user: "1000:1000"
     volumes:
       - .:/app
+      - uploads_data:/tmp/statement_uploads
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
@@ -71,9 +72,11 @@ services:
     build: ./ 
     command: arq app.worker.WorkerSettings
     env_file:
-      - .env 
+      - .env
+    user: "1000:1000"
     volumes:
-      - .:/app 
+      - .:/app
+      - uploads_data:/tmp/statement_uploads
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379/0
@@ -88,6 +91,7 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
 
 networks:
   ledger_network:
