@@ -10,6 +10,7 @@ from app.services.parsers.registry import parse_excel_payload
 from app.services.ledger_parser import save_transactions_to_db
 from app.database import AsyncSessionLocal
 from app.models.category_rule import CategoryRule
+from app.models.user import User
 from app.core.config import settings
 from app.services.storage import storage
 
@@ -49,19 +50,20 @@ async def process_excel_file(
 ) -> dict[str, Any]:
 
     job_id = ctx.get("job_id", "unknown")
-    path_obj = Path(file_path)
 
     logger.info(
         f"Picked up job [{job_id}] for User ID: {user_id}. File path: {file_path}."
     )
 
     try:
-        if not path_obj.exists:
+        try:
+            file_bytes = storage.get(file_path)
+        except FileNotFoundError:
             raise HTTPException(
-                status_code=400,
-                detail="File path does not exist."
+                status_code=404,
+                detail="File path does not exist in storage."
             )
-        file_bytes = path_obj.read_bytes()
+
 
         # KERNEL KEY INJECTION.
         # Set the PostgreSQL session variable so RLS allows worker to see the user's data
