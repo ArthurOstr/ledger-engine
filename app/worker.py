@@ -11,6 +11,7 @@ from app.services.ledger_parser import save_transactions_to_db
 from app.database import AsyncSessionLocal
 from app.models.category_rule import CategoryRule
 from app.core.config import settings
+from app.services.storage import storage
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,7 +120,7 @@ async def process_excel_file(
             "error": "Internal server error occurred while processing statement.",
         }
     finally:
-        path_obj.unlink(missing_ok=True)
+        await storage.delete(file_path)
 
 class WorkerSettings:
     redis_settings = settings.redis_settings
