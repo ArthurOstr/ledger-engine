@@ -1,4 +1,6 @@
 import io
+import uuid
+
 import pytest
 import pandas as pd
 from pathlib import Path
@@ -10,6 +12,7 @@ from app.worker import process_excel_file
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.category_rule import CategoryRule
+from app.services.storage import storage
 
 pytestmark = pytest.mark.asyncio
 
@@ -56,21 +59,22 @@ async def test_worker_process_excel_file(tmp_path: Path):
         db.add(rule)
         await db.commit()
 
-        mock_file_path = tmp_path / "test_statement.xlsx"
-        mock_file_path.write_bytes(create_mock_excel())
-        assert mock_file_path.exists()
+        file_key = f"uploads/test_{uuid.uuid4().hex}.xlsx"
+        ref_key = await storage.put(file_key, create_mock_excel())
 
         test_context = {"db_session": db}
 
         # 2. Execute the background worker directly
-        result = await process_excel_file(ctx=test_context, file_path=str(mock_file_path), user_id=user.id)
+        result = await process_excel_file(ctx=test_context, file_path=str(ref_key), user_id=user.id)
 
     assert result["status"] == "SUCCESS"
     assert result["inserted_count"] == 1
     assert result["error"] is None
-    assert not mock_file_path.exists()
 
-    # 3. Mathematically prove the worker successfully injected the rules into the parsers
+    assert not Path(ref_key).exists(), "Local staging file was not unlinked"
+    with pytest.raises(FileNotFoundError):
+        await storage.get(ref_key)
+
     async with TestingSessionLocal() as db:
         await db.execute(
             text(f"SELECT set_config('app.current_user_id', '{user.id}', true)")

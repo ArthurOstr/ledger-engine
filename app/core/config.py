@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Literal
 from urllib.parse import urlparse
 from sqlalchemy.ext.asyncio import create_async_engine
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    STORAGE_BACKEND: Literal["local", "r2"] = "local"
+    UPLOAD_LOCAL_DIR: str = "/tmp/statement_uploads"
+
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = "ledger-statements"
+    R2_ENDPOINT_URL: str = ""
 
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",

@@ -11,6 +11,7 @@ from app.services.ledger_queries import fetch_transaction
 from app.schemas.transaction import TransactionResponse
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.services.storage import storage
 
 logger = logging.getLogger(__name__)
 
@@ -37,35 +38,30 @@ async def upload_ledger(
             status_code=400, detail="Invalid file type. Only .xls or .xlsx allowed"
         )
 
-    target_path = None
-    bytes_written = 0
+    ref_key = None
 
     try:
-        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-        target_path = UPLOAD_DIR / unique_filename
-
-        async with aiofiles.open(target_path, "wb") as buffer:
-            while chunk := await file.read(1024*1024):
-                await buffer.write(chunk)
-                bytes_written += len(chunk)
-
-        if bytes_written == 0:
-           logger.warning(
-               f"Upload rejected for User [{current_user.id}]: '{file.filename}' is empty"
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size == 0:
+            logger.warning(
+                f"Upload rejected for User [{current_user.id}]: '{file.filename}' is empty"
             )
-           target_path.unlink(missing_ok=True)
-           raise HTTPException(status_code=400, detail="Uploaded file is empty")
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        file_key = f"uploads/{uuid.uuid4().hex}_{file.filename}"
+        ref_key = await storage.put(file_key, file_bytes)
 
         # Drop payload into the Redis Broker. It must match redis config(currently worker.py)
         job = await redis_pool.enqueue_job(
             "process_excel_file",
-            file_path=str(target_path),
+            file_path=ref_key,
             user_id=current_user.id
         )
 
         logger.info(
             f"Enqueued job [{job.job_id}] for User [{current_user.id}]:"
-            f"file='{file.filename}' ({bytes_written} bytes) -> path='{target_path}'"
+            f"file='{file.filename}' ({file_size} bytes) -> ref_key='{ref_key}'"
         )
 
         return {
@@ -77,14 +73,16 @@ async def upload_ledger(
         }
 
     except HTTPException:
+        if ref_key:
+            await storage.delete(ref_key)
         raise
 
     except Exception as e:
         logger.exception(
             f"Failed to stage upload for User [{current_user.id}], file='{file.filename}': {str(e)}"
         )
-        if target_path and target_path.exists():
-            target_path.unlink(missing_ok=True)
+        if ref_key:
+            await storage.put(ref_key)
 
         raise HTTPException(status_code=500, detail=f"Broker rejection or storage failure: {str(e)}")
 
