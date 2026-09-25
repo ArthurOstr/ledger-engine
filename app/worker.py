@@ -118,6 +118,8 @@ async def process_excel_file(
             "inserted_count": 0,
             "error": "Internal server error occurred while processing statement.",
         }
+    finally:
+        path_obj.unlink(missing_ok=True)
 
 class WorkerSettings:
     redis_settings = settings.redis_settings

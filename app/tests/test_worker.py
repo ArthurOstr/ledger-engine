@@ -1,8 +1,9 @@
 import io
 import pytest
 import pandas as pd
-from sqlalchemy import text
-from sqlalchemy.future import select
+from pathlib import Path
+from sqlalchemy import select, text
+from decimal import Decimal
 
 from tests.conftest import TestingSessionLocal
 from app.worker import process_excel_file
@@ -36,7 +37,7 @@ def create_mock_excel() -> bytes:
 
 # --- TESTS: WORKER EXECUTION ---
 
-async def test_worker_process_excel_file():
+async def test_worker_process_excel_file(tmp_path: Path):
     async with TestingSessionLocal() as db:
 
         # Forge a user and a custom rule using your exact models
@@ -55,20 +56,29 @@ async def test_worker_process_excel_file():
         db.add(rule)
         await db.commit()
 
-        file_bytes = create_mock_excel()
+        mock_file_path = tmp_path / "test_statement.xlsx"
+        mock_file_path.write_bytes(create_mock_excel())
+        assert mock_file_path.exists()
+
         test_context = {"db_session": db}
 
         # 2. Execute the background worker directly
-        result = await process_excel_file(ctx=test_context, file_bytes=file_bytes, user_id=user.id)
+        result = await process_excel_file(ctx=test_context, file_path=str(mock_file_path), user_id=user.id)
 
     assert result["status"] == "SUCCESS"
     assert result["inserted_count"] == 1
     assert result["error"] is None
+    assert not mock_file_path.exists()
 
     # 3. Mathematically prove the worker successfully injected the rules into the parsers
     async with TestingSessionLocal() as db:
-        result = await db.execute(select(Transaction).where(Transaction.owner_id == user.id))
-        tx = result.scalars().first()
+        await db.execute(
+            text(f"SELECT set_config('app.current_user_id', '{user.id}', true)")
+        )
+        query = select(Transaction).where(Transaction.owner_id == user.id)
+
+        db_result = await db.execute(query)
+        tx = db_result.scalars().first()
 
         assert tx is not None
         assert tx.amount == -150.50
