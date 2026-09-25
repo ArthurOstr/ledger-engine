@@ -14,7 +14,7 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = Path("tmp/statement_uploads")
+UPLOAD_DIR = Path("/tmp/statement_uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
