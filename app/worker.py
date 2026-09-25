@@ -57,7 +57,7 @@ async def process_excel_file(
 
     try:
         try:
-            file_bytes = storage.get(file_path)
+            file_bytes = await storage.get(file_path)
         except FileNotFoundError:
             raise HTTPException(
                 status_code=404,
