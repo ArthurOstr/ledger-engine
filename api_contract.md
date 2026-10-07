@@ -83,7 +83,7 @@ Accepts a raw Excel export from the bank, dynamically hashes transactions for te
 - **Endpoint:** `POST /api/transactions/upload`
 - **Security:** Protected — requires `Authorization: Bearer <token>` header
 - **Content-Type:** `multipart/form-data`
-- **Payload:** `file` — binary `.xlsx` file
+- **Payload:** `file` — binary file: `.xlsx` or `.xls`
 - **Success Response `202 OK`:**
 
 ```json
@@ -97,8 +97,63 @@ Accepts a raw Excel export from the bank, dynamically hashes transactions for te
 ```
 
 - **Error Response `401 Unauthorized`:** Token missing or expired.
-- **Error Response `400 Bad Request`:** Invalid data structure or parsing failure.
+- **Error Response `400 Bad Request`:**
+  - File extension not supported: {"detail": "Invalid file type. Only .xls or .xlsx allowed"}
+  - Zero-byte payload: {"detail": "Uploaded file is empty."}
+- **Error Response 500 Internal Server Error:** Storage adapter or broker queue rejection
 
+### Check Job Processing Status
+
+Polls the state and final execution result of an enqueued background parsing job.
+
+- Endpoint: GET /api/transactions/jobs/{job_id}
+
+- Security: Protected — requires Authorization: Bearer <token> header
+
+- Success Response 200 OK (In Progress / Queued):
+
+```json
+
+{
+  "job_id": "893c83759df14d0382875ab947eb387f",
+  "status": "in_progress",
+  "result": null
+}
+```
+
+- **Success Response 200 OK (Completed Successfully):**
+
+```json
+
+{
+  "job_id": "893c83759df14d0382875ab947eb387f",
+  "status": "completed",
+  "result": {
+    "status": "SUCCESS",
+    "inserted_count": 42,
+    "error": null
+  }
+}
+```
+
+- **Success Response 200 OK (Parsing or Validation Failed):**
+
+```json
+
+{
+  "job_id": "893c83759df14d0382875ab947eb387f",
+  "status": "failed",
+  "result": {
+    "status": "FAILED",
+    "inserted_count": 0,
+    "error": "Failed to parse Excel file: missing required column 'Деталі операції'"
+  }
+}
+```
+
+- **Error Response 401 Unauthorized:** Missing or expired JWT token.
+
+- **Error Response 404 Not Found:** Returned if the job ID has expired or does not exist in the broker.
 ---
 
 ## 4. Vault Retrieval
@@ -176,6 +231,7 @@ Creates a dynamic categorization blueprint and instantly triggers a push-down re
 - **Error Response `401 Unauthorized`:** Token missing or expired.
 - **Error Response `409 Conflict`:** Returned if an active rule for this exact keyword already exists for the tenant.
 
+
 ---
 
 ### Get Active Rules
@@ -214,7 +270,7 @@ Retrieves all active categorization rules belonging strictly to the authenticate
 Executes an atomic Core statement to permanently destroy a categorization blueprint. Strictly verifies tenant ownership before deletion to prevent cross-tenant breaches.
 
 - **Endpoint:** `DELETE /api/rules/{rule_id}`
-- **Security:** Protected — requires `Authorization: Bearer <token>` header
+- **Security:** Protected — requires valid `access_token` session cookie (`withCredentials: true`)
 - **Success Response `204 No Content`:** No body returned upon successful deallocation.
 - **Error Response `401 Unauthorized`:** Token missing or expired.
 - **Error Response `404 Not Found`:** Returned if the rule ID does not exist or belongs to a different user.

@@ -1,10 +1,11 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Literal
 
 from app.models.transaction import BankSource
 
+# TRANSACTION DOMAIN SCHEMAS
 
 class TransactionBase(BaseModel):
     date: datetime
@@ -40,3 +41,42 @@ class TransactionResponse(TransactionBase, ORMResponseBase):
 
     id: int
     created_at: datetime
+
+# JOB STATUS SCHEMAS
+
+class UploadResponse(BaseModel):
+    """Response returned immediately upon staging a file (HTTP 202)."""
+    filename: Optional[str] = None
+    user_email: Optional[str] = None
+    message: str
+    job_id: str
+    status: Literal["queued"] = "queued"
+
+
+class JobExecutionResult(BaseModel):
+    """Inner payload emitted by the arq worker upon completion."""
+    status: Literal["SUCCESS", "FAILED"]
+    inserted_count: int = 0
+    error: Optional[str] = None
+
+
+class StatusResponseSchema(BaseModel):
+    """
+    Response returned by GET /transactions/status/{job_id}.
+    Matches the StatusResponse interface on the frontend.
+    """
+    job_id: str
+    status: Literal["queued", "in_progress", "completed", "failed"]
+    inserted_count: Optional[int] = None
+    error: Optional[str] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "job_id": "35185a65cb3f4cd6939ba200bc07fff7",
+                "status": "completed",
+                "inserted_count": 42,
+                "error": None,
+            }
+        }
+    )
