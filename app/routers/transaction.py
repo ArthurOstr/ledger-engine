@@ -114,15 +114,18 @@ async def get_upload_status(job_id: str, redis_pool=Depends(get_redis_pool)):
         return {"job_id": job_id, "status": "FAILED", "error": "Job expired or not found in Redis"}
 
     if status != JobStatus.complete:
-        return {"job_id": job_id, "status": status.value.upper()}
+        return {"job_id": job_id, "status": status.value.lower()}
 
     try:
         result_dict = await job.result(timeout=0)
+        worker_status = str(result_dict.get("worker_status", "failed")).lower()
+
+        normalized_status = "completed" if worker_status in ("success", "complete", "completed") else "failed"
 
         # Merge the worker's dictionary into the HTTP response
         return {
             "job_id": job_id,
-            "status": result_dict.get("status", "FAILED"),
+            "status": normalized_status,
             "inserted_count": result_dict.get("inserted_count", 0),
             "error": result_dict.get("error", "Unknown processing error")
         }
