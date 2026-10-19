@@ -118,7 +118,7 @@ async def get_upload_status(job_id: str, redis_pool=Depends(get_redis_pool)):
 
     try:
         result_dict = await job.result(timeout=0)
-        worker_status = str(result_dict.get("worker_status", "failed")).lower()
+        worker_status = str(result_dict.get("status", "failed")).lower()
 
         normalized_status = "completed" if worker_status in ("success", "complete", "completed") else "failed"
 
