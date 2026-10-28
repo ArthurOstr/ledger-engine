@@ -1,11 +1,12 @@
 import io
 import uuid
+from pathlib import Path
+from decimal import Decimal
 
+import openpyxl
 import pytest
 import pandas as pd
-from pathlib import Path
 from sqlalchemy import select, text
-from decimal import Decimal
 
 from tests.conftest import TestingSessionLocal
 from app.worker import process_excel_file
@@ -17,24 +18,45 @@ from app.services.storage import storage
 pytestmark = pytest.mark.asyncio
 
 # --- MOCK FACTORY ---
-def create_mock_excel() -> bytes:
-    # Strictly aligned with your current test_parser.py and ledger_parser.py columns
-    data = {
-        "Дата i час операції": ["01.05.2026 14:30:00"],
-        "Деталі операції": ["Аврора"],
-        "MCC": [5411],
-        "Сума в валюті картки (UAH)": ["-150.50"],
-        "Валюта": ["UAH"],
-        "Сума в валюті операції": ["-150.50"],
-        "Залишок після операції": ["1000.00"],
-        "Курс": ["—"],
-        "Сума комісій (UAH)": ["0"],
-        "Сума кешбеку (UAH)": ["0"]
-    }
-    df = pd.DataFrame(data)
+def create_mock_excel(include_card_preamble: bool = True) -> bytes:
+    """Generates a realistic in-memory Monobank statement with preamble metadata."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    if include_card_preamble:
+        ws.append(["Виписка за період: 01.05.2026 - 31.05.2026"])
+        ws.append(["Інформація по картці: 4441 **** **** 0233"])
+        ws.append(["Валюта: UAH"])
+
+    headers = [
+        "Дата i час операції",
+        "Деталі операції",
+        "MCC",
+        "Сума в валюті картки (UAH)",
+        "Валюта",
+        "Сума в валюті операції",
+        "Залишок після операції",
+        "Курс",
+        "Сума комісій (UAH)",
+        "Сума кешбеку (UAH)"
+    ]
+    ws.append(headers)
+
+    ws.append([
+        "01.05.2026 14:30:00",
+        "Аврора",
+        5411,
+        "-150.50",
+        "UAH",
+        "-150.50",
+        "1000.00",
+        "—",
+        "0",
+        "0",
+    ])
+
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
+    wb.save(output, format="xlsx")
     return output.getvalue()
 
 
@@ -44,7 +66,7 @@ async def test_worker_process_excel_file(tmp_path: Path):
     async with TestingSessionLocal() as db:
 
         # Forge a user and a custom rule using your exact models
-        user = User(email="worker_test@example.com", hashed_password="hashed")
+        user = User(email=f"worker_{uuid.uuid4().hex[:6]}@example.com", hashed_password="hashed")
         db.add(user)
         await db.commit()
         await db.execute(text(f"SELECT set_config('app.current_user_id', '{user.id}', true)"))
@@ -60,7 +82,7 @@ async def test_worker_process_excel_file(tmp_path: Path):
         await db.commit()
 
         file_key = f"uploads/test_{uuid.uuid4().hex}.xlsx"
-        ref_key = await storage.put(file_key, create_mock_excel())
+        ref_key = await storage.put(file_key, create_mock_excel(include_card_preamble=True))
 
         test_context = {"db_session": db}
 
@@ -87,3 +109,29 @@ async def test_worker_process_excel_file(tmp_path: Path):
         assert tx is not None
         assert tx.amount == -150.50
         assert tx.category == "Custom Home Repair"
+        assert tx.balance_after == Decimal("1000.00")
+        assert tx.card == "4441 **** **** 0233"
+        assert tx.hash_id is not None
+
+async def test_worker_deduplication_zero_inserts():
+    """Verifies worker handles identical file re-upload without errors (inserted_count == 0)."""
+    async with TestingSessionLocal() as db:
+        user = User(email=f"dedup_{uuid.uuid4().hex[:6]}@example.com", hashed_password="hashed")
+        db.add(user)
+        await db.commit()
+
+        excel_bytes = create_mock_excel(include_card_preamble=True)
+        test_context = {"db_session": db}
+
+        # First upload: inserts 1 row
+        ref_key_1 = await storage.put(f"uploads/test_{uuid.uuid4().hex}.xlsx", excel_bytes)
+        res_1 = await process_excel_file(ctx=test_context, file_path=str(ref_key_1), user_id=user.id)
+        assert res_1["status"] == "SUCCESS"
+        assert res_1["inserted_count"] == 1
+
+        # Second upload of the exact same data: deduplicates, inserts 0 rows
+        ref_key_2 = await storage.put(f"uploads/test_{uuid.uuid4().hex}.xlsx", excel_bytes)
+        res_2 = await process_excel_file(ctx=test_context, file_path=str(ref_key_2), user_id=user.id)
+        assert res_2["status"] == "SUCCESS"
+        assert res_2["inserted_count"] == 0
+        assert res_2["error"] is None

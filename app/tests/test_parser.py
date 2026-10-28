@@ -58,6 +58,12 @@ PRIVAT_DATA = {
     "Валюта залишку": ["UAH", "UAH"]
 }
 
+MONO_PREAMBLE_ROWS = [
+    ["Виписка за період: 01.10.2026 - 15.10.2026"],
+    ["Інформація по картці: 4441 **** **** 0233"],
+    ["Валюта: UAH"],
+]
+
 
 # --- UNIT TESTS: ROUTER IDENTIFICATION ---
 
@@ -102,6 +108,9 @@ def test_parse_excel_payload_mono_success():
     # Proves regex category rule worked ("аврора" -> "Дім та ремонт")
     assert transactions[0].category == "Дім та ремонт"
 
+    assert transactions[0].card == "4441 **** **** 0233"
+    assert transactions[1].card == "4441 **** **** 0233"
+
     assert transactions[0].exchange_rate is None
     assert transactions[1].exchange_rate == Decimal("39.50")
 
@@ -117,6 +126,9 @@ def test_parse_excel_payload_privat_success():
     assert transactions[0].bank == BankSource.PRIVATBANK
     assert transactions[0].amount == Decimal("-200.00")
     assert transactions[0].category == "Продукти"
+
+    assert transactions[0].card == "5168 **** **** 8142"
+    assert transactions[1].card == "5168 **** **** 8142"
 
 
 def test_parse_excel_payload_corrupted_file():
@@ -212,3 +224,32 @@ async def test_save_to_db_chunking_and_deduplication(db_session):
         chunk_size=1000,
     )
     assert duplicate_count == 0
+
+    def test_hash_id_distinguishes_different_cards():
+        """Confirms that identical transactions on separate cards produce unique hash_ids."""
+        from app.services.parsers.base import generate_row_hash
+
+        common_kwargs = {
+            "user_id": 1,
+            "bank": BankSource.PRIVATBANK,
+            "date": pd.Timestamp("2026-10-15 12:00:00"),
+            "amount": Decimal("-500.00"),
+            "description": "Переказ між картками",
+        }
+
+        hash_card_a = generate_row_hash(card="5168 **** **** 1111", **common_kwargs)
+        hash_card_b = generate_row_hash(card="5168 **** **** 2222", **common_kwargs)
+
+        assert hash_card_a != hash_card_b
+
+        def test_parse_mono_without_card_preamble():
+            """Confirms parser handles clean exports lacking card metadata gracefully."""
+            # include_garbage_header=False starts directly at table headers
+            file_bytes = create_mock_excel(MONO_DATA, include_garbage_header=False)
+            test_user_id = 1
+
+            transactions = parse_excel_payload(file_bytes, test_user_id, user_rules={})
+
+            assert len(transactions) == 2
+            assert transactions[0].card is None
+            assert transactions[0].hash_id is not None
