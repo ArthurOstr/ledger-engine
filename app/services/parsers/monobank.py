@@ -17,7 +17,8 @@ MCC_MAPPING = {
 }
 
 MONO_MAPPING = {
-    "Дата i час операції": "date",
+    "Дата і час операції": "date",  # Cyrillic і (\u0456)
+    "Дата i час операції": "date",  # Latin i (\u0069)
     "Деталі операції": "description",
     "MCC": "mcc",
     "Сума в валюті операції": "transaction_amount",
@@ -27,10 +28,6 @@ MONO_MAPPING = {
 }
 
 class MonobankParser(BaseBankParser):
-    @staticmethod
-    def resolve_bank_category(row: pd.Series) -> str | None:
-        pass
-
     @property
     def bank_source(self) -> BankSource:
         return BankSource.MONOBANK
@@ -43,11 +40,22 @@ class MonobankParser(BaseBankParser):
     def row_anchors(self) -> set[str]:
         return {"MCC", "Дата і час операції", "Дата i час операції"}
 
+    @staticmethod
+    def resolve_bank_category(row: pd.Series) -> str | None:
+        if pd.notna(row.get("mcc")):
+            try:
+                mcc_code = int(float(row["mcc"]))
+                if mcc_code in MCC_MAPPING:
+                    return MCC_MAPPING[mcc_code]
+            except (ValueError, TypeError):
+                pass
+        return None
+
     def translate_schema(self, df: pd.DataFrame) -> pd.DataFrame:
         extracted_currency = "UAH"
         dynamic_renames = {}
 
-        # Regex scanner
+        # Regex scanner for dynamic currency header
         for col in df.columns:
             col_str = str(col)
             # Capture 3 letters that matter to find the currency we need
@@ -65,7 +73,15 @@ class MonobankParser(BaseBankParser):
         df = df.rename(columns=dynamic_renames)
         df = df.rename(columns=MONO_MAPPING)
 
+        # Extraction preamble text
+        preamble = str(df.attrs.get("preamble", ""))
+        extracted_card = None
+        card_match = re.search(r"(\d{4})\s*(?:\*+\s*)+(\d{4})", preamble)
+        if card_match:
+            extracted_card = f"{card_match.group(1)} **** **** {card_match.group(2)}"
+
         # Injects dynamically extracted currency into every row
+        df["card"] = extracted_card
         df["currency"] = extracted_currency
 
         if "balance_currency" not in df.columns:
@@ -89,14 +105,3 @@ class MonobankParser(BaseBankParser):
             )
         # Purge empty or corrupted rows
         return df_clean.dropna(subset=["amount"])
-
-    @staticmethod
-    def resolve_bank_source(row: pd.Series) -> str | None:
-        if pd.notna(row.get("mcc")):
-            try:
-                mcc_code = int(float(row["mcc"]))
-                if mcc_code in MCC_MAPPING:
-                    return MCC_MAPPING[mcc_code]
-            except (ValueError, TypeError):
-                pass
-        return None

@@ -28,9 +28,10 @@ def generate_row_hash(
     bank: BankSource,
     date: pd.Timestamp,
     amount: Decimal,
+    card: str,
     description: str,
 ) -> str:
-    raw_string = f"{user_id}|{bank}|{date}|{amount}|{str(description).strip()}"
+    raw_string = f"{user_id}|{bank}|{date}|{amount}|{str(card).strip()}|{str(description).strip()}"
     return hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
 # Sanitization
@@ -92,7 +93,7 @@ def sanitize_data(df: pd.DataFrame) -> pd.DataFrame:
 def _extract_raw_dataframe(contents: bytes, header_anchors: set[str]) -> pd.DataFrame:
     """
     Single-pass Excel reader:
-    Extract raw dataframe from uploaded contents and find true header
+    Extract raw dataframe from uploaded contents, capture preamble metadata, and find true header
     """
     try:
         # Reads the file adn turn it into a raw pandas dataframe
@@ -121,6 +122,13 @@ def _extract_raw_dataframe(contents: bytes, header_anchors: set[str]) -> pd.Data
                 status_code=400, detail="Unknown statement architecture"
             )
 
+    # Capture preamble metadata before slicing
+    preamble_rows = raw_df.iloc[:header_idx]
+    preamble_text = " ".join(
+        " ".join(row.dropna().astype(str).tolist())
+        for _, row in preamble_rows.iterrows
+    )
+
     # In-memory slice and header promotion
     raw_headers = raw_df.iloc[header_idx].tolist()
     clean_headers = [
@@ -132,6 +140,7 @@ def _extract_raw_dataframe(contents: bytes, header_anchors: set[str]) -> pd.Data
     data_df.columns = clean_headers
     data_df.reset_index(drop=True, inplace=True)
     data_df.dropna(how="all", inplace=True)
+    data_df.attrs["preamble"] = preamble_text
 
     del raw_df
     return data_df
@@ -207,13 +216,16 @@ class BaseBankParser(ABC):
         # 4. Defaults and clean nulls
         if "balance_currency" not in df.columns:
             df["balance_currency"] = None
+        if "card" not in df.columns:
+            df["card"] = None
+
         df = df.where(pd.notnull(df), None)
 
         # 5. Enrich and hash
         df["bank"] = self.bank_source
         df["hash_id"] = df.apply(
             lambda row: generate_row_hash(
-                user_id, self.bank_source, row["date"], row["amount"], row.get("description", "")
+                user_id, self.bank_source, row["date"], row["amount"], card=str(row.get("card" or "")).strip(), description=str(row.get("description" or "")).strip()
             ),
             axis=1,
         )
