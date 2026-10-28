@@ -125,8 +125,7 @@ def _extract_raw_dataframe(contents: bytes, header_anchors: set[str]) -> pd.Data
     # Capture preamble metadata before slicing
     preamble_rows = raw_df.iloc[:header_idx]
     preamble_text = " ".join(
-        " ".join(row.dropna().astype(str).tolist())
-        for _, row in preamble_rows.iterrows
+        raw_df.iloc[:header_idx].dropna(how="all").astype(str).to_numpy().flatten()
     )
 
     # In-memory slice and header promotion

@@ -56,7 +56,7 @@ def create_mock_excel(include_card_preamble: bool = True) -> bytes:
     ])
 
     output = io.BytesIO()
-    wb.save(output, format="xlsx")
+    wb.save(output)
     return output.getvalue()
 
 
