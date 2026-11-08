@@ -117,15 +117,17 @@ def _extract_raw_dataframe(contents: bytes, header_anchors: set[str]) -> pd.Data
             header_idx = idx
             break
 
-        if header_idx is not None:
-            raise HTTPException(
+    if header_idx is None:
+        raise HTTPException(
                 status_code=400, detail="Unknown statement architecture"
             )
 
     # Capture preamble metadata before slicing
-    preamble_rows = raw_df.iloc[:header_idx]
     preamble_text = " ".join(
-        raw_df.iloc[:header_idx].dropna(how="all").astype(str).to_numpy().flatten()
+        str(val).strip()
+        for row in raw_df.iloc[:header_idx].itertuples(index=False)
+        for val in row
+        if pd.notna(val) and str(val).strip()
     )
 
     # In-memory slice and header promotion

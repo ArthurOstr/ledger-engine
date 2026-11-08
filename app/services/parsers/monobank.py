@@ -17,7 +17,6 @@ MCC_MAPPING = {
 }
 
 MONO_MAPPING = {
-    "Дата і час операції": "date",  # Cyrillic і (\u0456)
     "Дата i час операції": "date",  # Latin i (\u0069)
     "Деталі операції": "description",
     "MCC": "mcc",

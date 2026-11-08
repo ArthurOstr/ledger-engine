@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from datetime import datetime
 from sqlalchemy import text
 
-from services.ledger_parser import detect_bank_source, parse_excel_payload, save_transactions_to_db
+from services.ledger_parser import detect_bank_source, save_transactions_to_db
+from services.parsers.registry import parse_excel_payload
 from app.models.user import User
 from app.models.transaction import BankSource
 from app.schemas.transaction import TransactionCreate
@@ -14,17 +15,17 @@ from app.schemas.transaction import TransactionCreate
 
 # --- MOCK DATA FACTORY ---
 
-def create_mock_excel(data: dict, include_garbage_header: bool = False) -> bytes:
+def create_mock_excel(data: dict, include_garbage_header: bool = False, preamble_rows: list[list[str]] | None = None) -> bytes:
     """Generates a raw Excel file in memory to simulate user uploads."""
     df = pd.DataFrame(data)
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if include_garbage_header:
-            # Simulate the weird empty rows banks sometimes put at the top
-            garbage = pd.DataFrame([["Bank Statement", "Confidential"], ["---", "---"]])
-            garbage.to_excel(writer, index=False, header=False, startrow=0)
-            df.to_excel(writer, index=False, startrow=2)
+            rows = preamble_rows if preamble_rows is not None else  MONO_PREAMBLE_ROWS
+            preamble_df = pd.DataFrame(rows)
+            preamble_df.to_excel(writer, index=False, startrow=0, header=False)
+            df.to_excel(writer, index=False, startrow=len(rows))
         else:
             df.to_excel(writer, index=False)
 
@@ -33,7 +34,7 @@ def create_mock_excel(data: dict, include_garbage_header: bool = False) -> bytes
 
 # Exact column architectures required by your translation matrices
 MONO_DATA = {
-    "Дата i час операції": ["01.05.2026 14:30:00", "02.05.2026 10:15:00"],
+    "Дата i час операції": ["01.05.2026 14:30:00", "02.05.2026 10:15:00"],
     "Деталі операції": ["Аврора", "Steam"],
     "MCC": [5411, 7993],
     "Сума в валюті картки (UAH)": ["-150.50", "-300.00"],
@@ -48,7 +49,7 @@ MONO_DATA = {
 PRIVAT_DATA = {
     "Дата": ["01.05.2026", "02.05.2026"],
     "Категорія": ["Продукти", "Кафе"],
-    "Картка": ["*1234", "*1234"],
+    "Картка": ["1234 **** **** 7895", "1234 **** **** 7445"],
     "Опис операції": ["Супермаркет", "Ресторан"],
     "Сума в валюті картки": ["-200.00", "-400.00"],
     "Валюта картки": ["UAH", "UAH"],
@@ -127,8 +128,8 @@ def test_parse_excel_payload_privat_success():
     assert transactions[0].amount == Decimal("-200.00")
     assert transactions[0].category == "Продукти"
 
-    assert transactions[0].card == "5168 **** **** 8142"
-    assert transactions[1].card == "5168 **** **** 8142"
+    assert transactions[0].card == "1234 **** **** 7895"
+    assert transactions[1].card == "1234 **** **** 7445"
 
 
 def test_parse_excel_payload_corrupted_file():
