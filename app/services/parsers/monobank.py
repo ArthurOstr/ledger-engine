@@ -4,17 +4,7 @@ import pandas as pd
 
 from app.models.transaction import BankSource
 from app.services.parsers.base import BaseBankParser
-
-MCC_MAPPING = {
-    5410: "Супермаркети та продукти",
-    5813: "Кафе та ресторани",
-    5811: "Кафе та ресторани",
-    4120: "Транспорт",
-    5540: "Авто",
-    5541: "Авто",
-    5911: "Аптеки та медицина",
-    8098: "Аптеки та медицина",
-}
+from app.services.parsers.mcc import resolve_mcc_category
 
 MONO_MAPPING = {
     "Дата i час операції": "date",  # Latin i (\u0069)
@@ -44,8 +34,7 @@ class MonobankParser(BaseBankParser):
         if pd.notna(row.get("mcc")):
             try:
                 mcc_code = int(float(row["mcc"]))
-                if mcc_code in MCC_MAPPING:
-                    return MCC_MAPPING[mcc_code]
+                return resolve_mcc_category(mcc_code)
             except (ValueError, TypeError):
                 pass
         return None

@@ -13,6 +13,7 @@ from app.models.category_rule import CategoryRule
 from app.models.user import User
 from app.core.config import settings
 from app.services.storage import storage
+from app.services.transfer_detector import detect_and_mark_transfers
 
 logging.basicConfig(
     level=logging.INFO,
@@ -94,6 +95,7 @@ async def process_excel_file(
         inserted_count = await save_transactions_to_db(
             db=db_session, transactions=transactions, user_id=user_id
         )
+        transfers_marked = await detect_and_mark_transfers(db=db_session, user_id=user_id)
         duplicate_count = parsed_count - inserted_count
 
         logger.info(f"Job [{job_id}] parsed {parsed_count} rows:"

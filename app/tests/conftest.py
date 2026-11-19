@@ -29,6 +29,7 @@ TestingSessionLocal = async_sessionmaker(
 async def prepare_database():
     """Builds and drops tables per test execution using Alembic to perfectly mirror production on the test engine"""
     async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
         await conn.execute(text("ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;"))

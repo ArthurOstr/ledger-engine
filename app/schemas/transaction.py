@@ -20,6 +20,7 @@ class TransactionBase(BaseModel):
     transaction_currency: str = Field(..., min_length=3, max_length=3)
     transaction_amount: Decimal = Field(..., max_digits=10, decimal_places=2)
     hash_id: str
+    is_transfer: bool = False
 
     mcc: Optional[int] = None
     commissions: Optional[Decimal] = None

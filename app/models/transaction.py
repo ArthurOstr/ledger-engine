@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, Numeric, DateTime, func, ForeignKey, Integer, Enum
+from sqlalchemy import String, Numeric, DateTime, func, ForeignKey, Integer, Enum, Boolean, text
 
 from app.database import Base
 
@@ -39,6 +39,12 @@ class Transaction(Base):
     balance_currency: Mapped[str] = mapped_column(String(3))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     hash_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    is_transfer: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
 
     # Monobank extensions
     mcc: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
