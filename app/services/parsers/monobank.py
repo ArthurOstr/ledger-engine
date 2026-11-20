@@ -7,8 +7,7 @@ from app.services.parsers.base import BaseBankParser
 from app.services.parsers.mcc import resolve_mcc_category
 
 MONO_MAPPING = {
-    "Дата i час операції": "date",  # Latin i (\u0069)
-    "Дата і час операції": "date",  # Cyrillic і (\u0456)
+    "Дата i час операції": "date",  # Latin i (\u0069)
     "Деталі операції": "description",
     "MCC": "mcc",
     "Сума в валюті операції": "transaction_amount",
