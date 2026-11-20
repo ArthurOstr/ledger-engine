@@ -34,7 +34,7 @@ def create_mock_excel(data: dict, include_garbage_header: bool = False, preamble
 
 # Exact column architectures required by your translation matrices
 MONO_DATA = {
-    "Дата i час операції": ["01.05.2026 14:30:00", "02.05.2026 10:15:00"],
+    "Дата i час операції": ["01.05.2026 14:30:00", "02.05.2026 10:15:00"],
     "Деталі операції": ["Аврора", "Steam"],
     "MCC": [5411, 7993],
     "Сума в валюті картки (UAH)": ["-150.50", "-300.00"],

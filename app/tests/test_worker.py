@@ -29,7 +29,7 @@ def create_mock_excel(include_card_preamble: bool = True) -> bytes:
         ws.append(["Валюта: UAH"])
 
     headers = [
-        "Дата i час операції",
+        "Дата i час операції",
         "Деталі операції",
         "MCC",
         "Сума в валюті картки (UAH)",
