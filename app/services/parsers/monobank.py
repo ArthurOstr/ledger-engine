@@ -8,6 +8,7 @@ from app.services.parsers.mcc import resolve_mcc_category
 
 MONO_MAPPING = {
     "Дата i час операції": "date",  # Latin i (\u0069)
+    "Дата і час операції": "date",  # Cyrillic і (\u0456)
     "Деталі операції": "description",
     "MCC": "mcc",
     "Сума в валюті операції": "transaction_amount",
@@ -40,6 +41,10 @@ class MonobankParser(BaseBankParser):
         return None
 
     def translate_schema(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Collapse newlines/extra spaces in Excel headers before matching
+        df = df.copy()
+        df.columns = [re.sub(r"\s+", " ", str(c)).strip() for c in df.columns]
+
         extracted_currency = "UAH"
         dynamic_renames = {}
 
@@ -85,11 +90,13 @@ class MonobankParser(BaseBankParser):
         ]
         df_clean = df[[c for c in final_cols if c in df.columns]].copy()
 
-        # Preventing KeyError if mapping fails to secure a column head. THE AIRLOCK
-        if "amount" not in df_clean.columns:
+        # Airlock: fail cleanly with 400 if either required column failed to map
+        missing_required = {"date", "amount"} - set(df_clean.columns)
+        if missing_required:
             raise HTTPException(
                 status_code=400,
-                detail="Critical error: Primary amount column couldn't be translated"
+                detail=f"Critical error: Required columns missing after translation: {sorted(missing_required)}"
             )
-        # Purge empty or corrupted rows
-        return df_clean.dropna(subset=["amount"])
+
+        # Purge summary/footer rows missing a date or amount
+        return df_clean.dropna(subset=["date", "amount"])

@@ -226,7 +226,12 @@ class BaseBankParser(ABC):
         df["bank"] = self.bank_source
         df["hash_id"] = df.apply(
             lambda row: generate_row_hash(
-                user_id, self.bank_source, row["date"], row["amount"], card=str(row.get("card" or "")).strip(), description=str(row.get("description" or "")).strip()
+                user_id,
+                self.bank_source,
+                row["date"],
+                row["amount"],
+                card="" if pd.isna(row.get("card")) else str(row.get("card")).strip(),
+                description="" if pd.isna(row.get("description")) else str(row.get("description")).strip(),
             ),
             axis=1,
         )
